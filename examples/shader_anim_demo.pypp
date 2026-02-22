@@ -55,6 +55,7 @@ while gfx.closed() == 0:
   end
 
   gfx.clear(10, 14, 24)
+  gfx.gradient_rect(0, 0, 960, 120, 16, 24, 40, 36, 46, 70, 1)
 
   # Fake "animation" from tick: pulsing square
   let pulse = (t / 6)
@@ -67,8 +68,9 @@ while gfx.closed() == 0:
   end
   gfx.rect(430, 230, size, size, 120, 220, 150)
   gfx.rect_outline(430, 230, size, size, 220, 250, 230)
+  gfx.line_thick(390, 210, 620, 350, 4, 120, 180, 255)
 
-  gfx.text(20, 20, "SHADER DEMO", 230, 240, 255)
+  gfx.text_scaled(20, 14, "SHADER DEMO", 2, 230, 240, 255)
   gfx.text(20, 36, "1 NONE 2 GRAY 3 SCAN 4 WAVE", 180, 220, 255)
   gfx.text(20, 48, "5 INVERT 6 POSTERIZE 7 RGBSPLIT 8 VIGNETTE", 180, 220, 255)
   gfx.text(20, 60, "9 CUSTOM PROGRAM", 180, 220, 255)

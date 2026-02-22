@@ -840,6 +840,49 @@ struct GraphicsState {
     }
   }
 
+  void LineThick(int x1, int y1, int x2, int y2, int thickness, int r, int g,
+                 int b) {
+    EnsureOpen("gfx.line_thick");
+    if (thickness <= 1) {
+      Line(x1, y1, x2, y2, r, g, b);
+      return;
+    }
+    const int dx = std::abs(x2 - x1);
+    const int dy = std::abs(y2 - y1);
+    const int steps = std::max(1, std::max(dx, dy));
+    const int radius = std::max(1, thickness / 2);
+    for (int i = 0; i <= steps; ++i) {
+      const double t = static_cast<double>(i) / static_cast<double>(steps);
+      const int px = static_cast<int>(
+          std::round(static_cast<double>(x1) +
+                     (static_cast<double>(x2 - x1) * t)));
+      const int py = static_cast<int>(
+          std::round(static_cast<double>(y1) +
+                     (static_cast<double>(y2 - y1) * t)));
+      Circle(px, py, radius, r, g, b);
+    }
+  }
+
+  void GradientRect(int x, int y, int w, int h, int r1, int g1, int b1, int r2,
+                    int g2, int b2, int vertical) {
+    EnsureOpen("gfx.gradient_rect");
+    if (w <= 0 || h <= 0) {
+      return;
+    }
+    const bool v = (vertical != 0);
+    const int span = std::max(1, v ? (h - 1) : (w - 1));
+    for (int yy = 0; yy < h; ++yy) {
+      for (int xx = 0; xx < w; ++xx) {
+        const int pos = v ? yy : xx;
+        const int rr = r1 + ((r2 - r1) * pos) / span;
+        const int gg = g1 + ((g2 - g1) * pos) / span;
+        const int bb = b1 + ((b2 - b1) * pos) / span;
+        SetPixelRaw(x + xx, y + yy,
+                    Pixel{ClampColor(rr), ClampColor(gg), ClampColor(bb)});
+      }
+    }
+  }
+
   void Save(const std::string& path) const {
     EnsureOpen("gfx.save");
     std::filesystem::path out(path);
@@ -1281,6 +1324,26 @@ struct GraphicsState {
     }
   }
 
+  void TextScaled(int x, int y, const std::string& text, int scale, int r, int g,
+                  int b) {
+    EnsureOpen("gfx.text_scaled");
+    if (scale <= 0) {
+      return;
+    }
+    Pixel color{ClampColor(r), ClampColor(g), ClampColor(b)};
+    int cx = x;
+    int cy = y;
+    for (char raw : text) {
+      if (raw == '\n') {
+        cx = x;
+        cy += (8 * scale);
+        continue;
+      }
+      DrawGlyph5x7Scaled(cx, cy, raw, scale, color);
+      cx += (6 * scale);
+    }
+  }
+
   int MouseX() const {
 #ifdef _WIN32
     return mouse_client_x;
@@ -1685,6 +1748,23 @@ struct GraphicsState {
         if (glyph[static_cast<std::size_t>(row)][static_cast<std::size_t>(col)] !=
             '.') {
           SetPixelRaw(x + col, y + row, color);
+        }
+      }
+    }
+  }
+
+  void DrawGlyph5x7Scaled(int x, int y, char c, int scale, const Pixel& color) {
+    const Glyph5x7& glyph = GlyphForChar(c);
+    for (int row = 0; row < 7; ++row) {
+      for (int col = 0; col < 5; ++col) {
+        if (glyph[static_cast<std::size_t>(row)][static_cast<std::size_t>(col)] ==
+            '.') {
+          continue;
+        }
+        for (int sy = 0; sy < scale; ++sy) {
+          for (int sx = 0; sx < scale; ++sx) {
+            SetPixelRaw(x + (col * scale) + sx, y + (row * scale) + sy, color);
+          }
         }
       }
     }
@@ -3710,12 +3790,33 @@ class VM {
       stack_.push_back(0);
       return;
     }
+    if (name == "gfx.line_thick") {
+      ExpectArgc(name, argc, 8);
+      gfx_.LineThick(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                     ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+                     ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+                     ValueAsInt(args[6], name), ValueAsInt(args[7], name));
+      stack_.push_back(0);
+      return;
+    }
     if (name == "gfx.rect") {
       ExpectArgc(name, argc, 7);
       gfx_.Rect(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
                 ValueAsInt(args[2], name), ValueAsInt(args[3], name),
                 ValueAsInt(args[4], name), ValueAsInt(args[5], name),
                 ValueAsInt(args[6], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.gradient_rect") {
+      ExpectArgc(name, argc, 11);
+      gfx_.GradientRect(
+          ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+          ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+          ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+          ValueAsInt(args[6], name), ValueAsInt(args[7], name),
+          ValueAsInt(args[8], name), ValueAsInt(args[9], name),
+          ValueAsInt(args[10], name));
       stack_.push_back(0);
       return;
     }
@@ -3972,6 +4073,23 @@ class VM {
       gfx_.Text(ValueAsInt(args[0], name), ValueAsInt(args[1], name), text_value,
                 ValueAsInt(args[3], name),
                 ValueAsInt(args[4], name), ValueAsInt(args[5], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.text_scaled") {
+      ExpectArgc(name, argc, 7);
+      std::string text_value;
+      if (std::holds_alternative<std::string>(args[2])) {
+        text_value = std::get<std::string>(args[2]);
+      } else if (std::holds_alternative<int>(args[2])) {
+        text_value = std::to_string(std::get<int>(args[2]));
+      } else {
+        throw std::runtime_error("gfx.text_scaled expects text as string or int");
+      }
+      gfx_.TextScaled(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                      text_value, ValueAsInt(args[3], name),
+                      ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+                      ValueAsInt(args[6], name));
       stack_.push_back(0);
       return;
     }

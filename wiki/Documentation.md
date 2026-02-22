@@ -64,6 +64,9 @@ Prints runtime/compiler version.
 - `gfx.mouse_show(visible)`
 - `gfx.button(x, y, w, h)`
 - `gfx.text(x, y, "TEXT", r, g, b)`
+- `gfx.text_scaled(x, y, "TEXT", scale, r, g, b)`
+- `gfx.line_thick(x1, y1, x2, y2, thickness, r, g, b)`
+- `gfx.gradient_rect(x, y, w, h, r1, g1, b1, r2, g2, b2, vertical)`
 - `gfx.anim_register(first_sprite, frame_count, frame_ticks, mode)` (`0` once, `1` loop, `2` ping-pong)
 - `gfx.anim_frame(anim_id, tick)`
 - `gfx.anim_length(anim_id)`

@@ -94,10 +94,13 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gfx.shader_program_len(program_id)`
   - `gfx.shader_use_program(program_id)`
   - `gfx.text(x, y, "TEXT", r, g, b)`
+  - `gfx.text_scaled(x, y, "TEXT", scale, r, g, b)`
   - `gfx.clear(r, g, b)`
   - `gfx.pixel(x, y, r, g, b)`
   - `gfx.line(x1, y1, x2, y2, r, g, b)`
+  - `gfx.line_thick(x1, y1, x2, y2, thickness, r, g, b)`
   - `gfx.rect(x, y, w, h, r, g, b)`
+  - `gfx.gradient_rect(x, y, w, h, r1, g1, b1, r2, g2, b2, vertical)`
   - `gfx.rect_outline(x, y, w, h, r, g, b)`
   - `gfx.circle(x, y, radius, r, g, b)`
   - `gfx.save("build/frame.ppm")`
