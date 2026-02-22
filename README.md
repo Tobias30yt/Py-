@@ -125,3 +125,23 @@ pypp compile examples\hello.pypp
 ```powershell
 ctest --test-dir build --output-on-failure
 ```
+
+## Upload EXE to GitHub Releases (Automated)
+
+This repo includes `.github/workflows/release.yml`.
+When you push a tag like `v0.4.0`, GitHub Actions will:
+
+- build `pypp.exe` on Windows
+- create `pypp-windows-x64.zip`
+- upload both files to a GitHub Release
+
+Commands:
+
+```powershell
+git add .
+git commit -m "Add release workflow"
+git push
+
+git tag v0.4.0
+git push origin v0.4.0
+```
