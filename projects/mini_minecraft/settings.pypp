@@ -1,0 +1,15 @@
+let width = 960
+let height = 540
+
+let fov = 420
+let near_clip = 4
+let far_clip = 10000
+
+let world_radius_blocks = 8
+let block_size = 34
+let ground_y = -130
+
+let move_speed = 10
+let fly_speed = 8
+let turn_speed = 3
+

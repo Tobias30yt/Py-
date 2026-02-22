@@ -15,6 +15,7 @@ Current focus areas:
 - [[Documentation]]: language syntax, compiler CLI, modules, objects, executable packaging
 - [[Graphics]]: full 2D graphics API and live game loop patterns
 - [[3D-Graphics]]: `gx3d` camera, projection, rotation, cube rendering
+- [[Random-Noise]]: standard random + procedural noise utilities
 - [[Extras]]: keycodes, release workflow, troubleshooting, roadmap
 
 ## Version Scope
@@ -56,4 +57,5 @@ cmake --build build --config Release
 1. [[Documentation]]
 2. [[Graphics]]
 3. [[3D-Graphics]]
-4. [[Extras]]
+4. [[Random-Noise]]
+5. [[Extras]]

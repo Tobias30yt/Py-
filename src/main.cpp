@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <random>
 #include <memory>
 #include <map>
 #include <unordered_map>
@@ -646,6 +647,21 @@ struct GraphicsState {
   bool window_open = false;
   std::array<bool, 256> key_state{};
   std::vector<std::uint32_t> rgba_buffer;
+  bool keep_aspect = false;
+  int aspect_w = 0;
+  int aspect_h = 0;
+  RECT viewport_rect{0, 0, 0, 0};
+  int mouse_client_x = -1;
+  int mouse_client_y = -1;
+  bool mouse_left_down = false;
+  bool mouse_right_down = false;
+  bool mouse_middle_down = false;
+  bool mouse_left_prev = false;
+  bool mouse_lock = false;
+  bool mouse_hidden = false;
+  int mouse_dx_acc = 0;
+  int mouse_dy_acc = 0;
+  bool suppress_mouse_delta = false;
 #endif
 
   bool IsOpen() const { return width > 0 && height > 0; }
@@ -667,6 +683,14 @@ struct GraphicsState {
 
   void PixelAt(int x, int y, int r, int g, int b) {
     EnsureOpen("gfx.pixel");
+    if (x < 0 || y < 0 || x >= width || y >= height) {
+      return;
+    }
+    pixels[static_cast<std::size_t>(y * width + x)] =
+        Pixel{ClampColor(r), ClampColor(g), ClampColor(b)};
+  }
+
+  void PixelAtFast(int x, int y, int r, int g, int b) {
     if (x < 0 || y < 0 || x >= width || y >= height) {
       return;
     }
@@ -808,12 +832,49 @@ struct GraphicsState {
       throw std::runtime_error("Failed to create window");
     }
     window_open = true;
+    keep_aspect = false;
+    aspect_w = 0;
+    aspect_h = 0;
     rgba_buffer.assign(static_cast<std::size_t>(width * height), 0);
     ShowWindow(hwnd, SW_SHOW);
     UpdateWindow(hwnd);
+    UpdateViewportRect();
 #else
     (void)title;
     throw std::runtime_error("Live windowing currently supported on Windows only");
+#endif
+  }
+
+  void OpenWindowRatio(int w, int h, int ratio_w, int ratio_h,
+                       const std::string& title) {
+    if (ratio_w <= 0 || ratio_h <= 0) {
+      throw std::runtime_error("gfx.window_ratio expects positive ratio");
+    }
+    OpenWindow(w, h, title);
+#ifdef _WIN32
+    keep_aspect = true;
+    aspect_w = ratio_w;
+    aspect_h = ratio_h;
+    UpdateViewportRect();
+#else
+    (void)ratio_w;
+    (void)ratio_h;
+#endif
+  }
+
+  void SetKeepAspect(int enabled) {
+#ifdef _WIN32
+    keep_aspect = (enabled != 0);
+    if (!keep_aspect) {
+      aspect_w = 0;
+      aspect_h = 0;
+    } else if (aspect_w <= 0 || aspect_h <= 0) {
+      aspect_w = width;
+      aspect_h = height;
+    }
+    UpdateViewportRect();
+#else
+    (void)enabled;
 #endif
   }
 
@@ -822,10 +883,31 @@ struct GraphicsState {
     if (!window_open) {
       return 0;
     }
+    mouse_left_prev = mouse_left_down;
     MSG msg{};
     while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
       TranslateMessage(&msg);
       DispatchMessageW(&msg);
+    }
+    if (window_open && hwnd) {
+      if (mouse_hidden || mouse_lock) {
+        SetMouseVisibleImpl(false);
+      } else {
+        SetMouseVisibleImpl(true);
+      }
+      if (mouse_lock) {
+        RECT client{};
+        if (GetClientRect(hwnd, &client)) {
+          POINT center{(client.right - client.left) / 2,
+                       (client.bottom - client.top) / 2};
+          POINT screen_center = center;
+          ClientToScreen(hwnd, &screen_center);
+          suppress_mouse_delta = true;
+          SetCursorPos(screen_center.x, screen_center.y);
+          mouse_client_x = center.x;
+          mouse_client_y = center.y;
+        }
+      }
     }
     return window_open ? 1 : 0;
 #else
@@ -860,7 +942,13 @@ struct GraphicsState {
     bmi.bmiHeader.biBitCount = 32;
     bmi.bmiHeader.biCompression = BI_RGB;
 
-    StretchDIBits(hdc, 0, 0, width, height, 0, 0, width, height,
+    UpdateViewportRect();
+    const int dst_x = viewport_rect.left;
+    const int dst_y = viewport_rect.top;
+    const int dst_w = std::max(1, static_cast<int>(viewport_rect.right - viewport_rect.left));
+    const int dst_h =
+        std::max(1, static_cast<int>(viewport_rect.bottom - viewport_rect.top));
+    StretchDIBits(hdc, dst_x, dst_y, dst_w, dst_h, 0, 0, width, height,
                   rgba_buffer.data(), &bmi, DIB_RGB_COLORS, SRCCOPY);
     ReleaseDC(hwnd, hdc);
     return 1;
@@ -891,6 +979,7 @@ struct GraphicsState {
 
   void CloseWindow() {
 #ifdef _WIN32
+    SetMouseVisibleImpl(true);
     if (hwnd) {
       DestroyWindow(hwnd);
       hwnd = nullptr;
@@ -958,6 +1047,100 @@ struct GraphicsState {
     }
     const SpriteAsset& s = GetSprite(sprite_id, "gfx.draw_sprite_scaled");
     BlitSprite(s, x, y, w, h);
+  }
+
+  int MouseX() const {
+#ifdef _WIN32
+    return mouse_client_x;
+#else
+    return -1;
+#endif
+  }
+
+  int MouseY() const {
+#ifdef _WIN32
+    return mouse_client_y;
+#else
+    return -1;
+#endif
+  }
+
+  int MouseDown(int button_code) const {
+#ifdef _WIN32
+    if (button_code == 0) {
+      return mouse_left_down ? 1 : 0;
+    }
+    if (button_code == 1) {
+      return mouse_right_down ? 1 : 0;
+    }
+    if (button_code == 2) {
+      return mouse_middle_down ? 1 : 0;
+    }
+    return 0;
+#else
+    (void)button_code;
+    return 0;
+#endif
+  }
+
+  int ConsumeMouseDX() {
+#ifdef _WIN32
+    int v = mouse_dx_acc;
+    mouse_dx_acc = 0;
+    return v;
+#else
+    return 0;
+#endif
+  }
+
+  int ConsumeMouseDY() {
+#ifdef _WIN32
+    int v = mouse_dy_acc;
+    mouse_dy_acc = 0;
+    return v;
+#else
+    return 0;
+#endif
+  }
+
+  void SetMouseLock(int enabled) {
+#ifdef _WIN32
+    mouse_lock = (enabled != 0);
+    mouse_dx_acc = 0;
+    mouse_dy_acc = 0;
+#else
+    (void)enabled;
+#endif
+  }
+
+  void SetMouseVisible(int enabled) {
+#ifdef _WIN32
+    mouse_hidden = (enabled == 0);
+    SetMouseVisibleImpl(!mouse_hidden);
+#else
+    (void)enabled;
+#endif
+  }
+
+  int Button(int x, int y, int w, int h) {
+    EnsureOpen("gfx.button");
+    if (w <= 0 || h <= 0) {
+      return 0;
+    }
+    bool hover = mouse_client_x >= x && mouse_client_x < (x + w) &&
+                 mouse_client_y >= y && mouse_client_y < (y + h);
+    if (hover) {
+      Rect(x, y, w, h, 90, 120, 190);
+      RectOutline(x, y, w, h, 220, 235, 255);
+    } else {
+      Rect(x, y, w, h, 55, 70, 110);
+      RectOutline(x, y, w, h, 140, 165, 230);
+    }
+    return (hover && mouse_left_down && !mouse_left_prev) ? 1 : 0;
+  }
+
+  const SpriteAsset& GetSpriteAsset(int sprite_id, const std::string& fn) const {
+    return GetSprite(sprite_id, fn);
   }
 
  private:
@@ -1036,6 +1219,60 @@ struct GraphicsState {
     return runtime;
   }
 
+  static void SetMouseVisibleImpl(bool visible) {
+    CURSORINFO ci{};
+    ci.cbSize = sizeof(CURSORINFO);
+    if (!GetCursorInfo(&ci)) {
+      return;
+    }
+    bool currently_visible = (ci.flags & CURSOR_SHOWING) != 0;
+    if (currently_visible == visible) {
+      return;
+    }
+    if (visible) {
+      while (ShowCursor(TRUE) < 0) {
+      }
+    } else {
+      while (ShowCursor(FALSE) >= 0) {
+      }
+    }
+  }
+
+  void UpdateViewportRect() {
+    if (!hwnd) {
+      viewport_rect = RECT{0, 0, width, height};
+      return;
+    }
+    RECT client{};
+    if (!GetClientRect(hwnd, &client)) {
+      viewport_rect = RECT{0, 0, width, height};
+      return;
+    }
+    const int cw = std::max(1, static_cast<int>(client.right - client.left));
+    const int ch = std::max(1, static_cast<int>(client.bottom - client.top));
+    if (!keep_aspect) {
+      viewport_rect = RECT{0, 0, cw, ch};
+      return;
+    }
+
+    const int rw = aspect_w > 0 ? aspect_w : width;
+    const int rh = aspect_h > 0 ? aspect_h : height;
+    long long lhs = static_cast<long long>(cw) * static_cast<long long>(rh);
+    long long rhs = static_cast<long long>(ch) * static_cast<long long>(rw);
+    int vw = cw;
+    int vh = ch;
+    if (lhs > rhs) {
+      vw = static_cast<int>((static_cast<long long>(ch) * rw) / rh);
+      vh = ch;
+    } else {
+      vw = cw;
+      vh = static_cast<int>((static_cast<long long>(cw) * rh) / rw);
+    }
+    const int ox = (cw - vw) / 2;
+    const int oy = (ch - vh) / 2;
+    viewport_rect = RECT{ox, oy, ox + vw, oy + vh};
+  }
+
   static LRESULT CALLBACK WndProcStatic(HWND hwnd, UINT msg, WPARAM wparam,
                                         LPARAM lparam) {
     GraphicsState* state = nullptr;
@@ -1057,11 +1294,59 @@ struct GraphicsState {
     switch (msg) {
       case WM_CLOSE:
         window_open = false;
+        SetMouseVisibleImpl(true);
         DestroyWindow(hwnd_handle);
         return 0;
       case WM_DESTROY:
         window_open = false;
+        SetMouseVisibleImpl(true);
         return 0;
+      case WM_SIZE:
+        UpdateViewportRect();
+        return 0;
+      case WM_SIZING:
+        if (keep_aspect) {
+          RECT* rc = reinterpret_cast<RECT*>(lparam);
+          if (!rc) {
+            return TRUE;
+          }
+          const int rw = aspect_w > 0 ? aspect_w : width;
+          const int rh = aspect_h > 0 ? aspect_h : height;
+          const int border_w = (rc->right - rc->left) - width;
+          const int border_h = (rc->bottom - rc->top) - height;
+          int client_w =
+              std::max(1, static_cast<int>((rc->right - rc->left) - border_w));
+          int client_h =
+              std::max(1, static_cast<int>((rc->bottom - rc->top) - border_h));
+
+          if ((wparam == WMSZ_LEFT) || (wparam == WMSZ_RIGHT) ||
+              (wparam == WMSZ_TOPLEFT) || (wparam == WMSZ_TOPRIGHT) ||
+              (wparam == WMSZ_BOTTOMLEFT) || (wparam == WMSZ_BOTTOMRIGHT)) {
+            client_h = std::max(1, static_cast<int>(
+                                       (static_cast<long long>(client_w) * rh) /
+                                       rw));
+          } else {
+            client_w = std::max(1, static_cast<int>(
+                                       (static_cast<long long>(client_h) * rw) /
+                                       rh));
+          }
+          const int outer_w = client_w + border_w;
+          const int outer_h = client_h + border_h;
+          if (wparam == WMSZ_LEFT || wparam == WMSZ_TOPLEFT ||
+              wparam == WMSZ_BOTTOMLEFT) {
+            rc->left = rc->right - outer_w;
+          } else {
+            rc->right = rc->left + outer_w;
+          }
+          if (wparam == WMSZ_TOP || wparam == WMSZ_TOPLEFT ||
+              wparam == WMSZ_TOPRIGHT) {
+            rc->top = rc->bottom - outer_h;
+          } else {
+            rc->bottom = rc->top + outer_h;
+          }
+          return TRUE;
+        }
+        return TRUE;
       case WM_KEYDOWN:
         if (wparam < 256) {
           key_state[static_cast<std::size_t>(wparam)] = true;
@@ -1071,6 +1356,42 @@ struct GraphicsState {
         if (wparam < 256) {
           key_state[static_cast<std::size_t>(wparam)] = false;
         }
+        return 0;
+      case WM_MOUSEMOVE: {
+        const int mx = static_cast<int>(static_cast<short>(LOWORD(lparam)));
+        const int my = static_cast<int>(static_cast<short>(HIWORD(lparam)));
+        if (!suppress_mouse_delta && mouse_client_x >= 0 && mouse_client_y >= 0) {
+          mouse_dx_acc += (mx - mouse_client_x);
+          mouse_dy_acc += (my - mouse_client_y);
+        }
+        mouse_client_x = mx;
+        mouse_client_y = my;
+        suppress_mouse_delta = false;
+        return 0;
+      }
+      case WM_LBUTTONDOWN:
+        mouse_left_down = true;
+        SetCapture(hwnd_handle);
+        return 0;
+      case WM_LBUTTONUP:
+        mouse_left_down = false;
+        ReleaseCapture();
+        return 0;
+      case WM_RBUTTONDOWN:
+        mouse_right_down = true;
+        SetCapture(hwnd_handle);
+        return 0;
+      case WM_RBUTTONUP:
+        mouse_right_down = false;
+        ReleaseCapture();
+        return 0;
+      case WM_MBUTTONDOWN:
+        mouse_middle_down = true;
+        SetCapture(hwnd_handle);
+        return 0;
+      case WM_MBUTTONUP:
+        mouse_middle_down = false;
+        ReleaseCapture();
         return 0;
       default:
         return DefWindowProcW(hwnd_handle, msg, wparam, lparam);
@@ -1179,6 +1500,19 @@ class VM {
  private:
   class Gx3dState {
    public:
+    struct ScreenVertex {
+      int x = 0;
+      int y = 0;
+      double z = 0.0;
+    };
+    struct ScreenVertexUv {
+      int x = 0;
+      int y = 0;
+      double z = 0.0;
+      double u = 0.0;
+      double v = 0.0;
+    };
+
     explicit Gx3dState(GraphicsState& gfx) : gfx_(gfx) {}
 
     void Reset() {
@@ -1188,7 +1522,10 @@ class VM {
       fov_ = 300.0;
       near_clip_ = 1.0;
       far_clip_ = 10000.0;
+      depth_dirty_ = true;
     }
+
+    void OnFrameReset() { depth_dirty_ = true; }
 
     void Camera(int x, int y, int z) {
       cam_ = Vec3{static_cast<double>(x), static_cast<double>(y),
@@ -1328,6 +1665,157 @@ class VM {
       }
     }
 
+    void CubeSolid(int cx, int cy, int cz, int size, int r, int g, int b) {
+      if (size <= 0) {
+        return;
+      }
+      CuboidSolid(cx, cy, cz, size, size, size, r, g, b);
+    }
+
+    void CuboidSolid(int cx, int cy, int cz, int sx, int sy, int sz, int r,
+                     int g, int b) {
+      RequireGfx("gx3d.cuboid_solid");
+      if (sx <= 0 || sy <= 0 || sz <= 0) {
+        return;
+      }
+      EnsureDepthBuffer();
+
+      const double hx = static_cast<double>(sx) / 2.0;
+      const double hy = static_cast<double>(sy) / 2.0;
+      const double hz = static_cast<double>(sz) / 2.0;
+      std::array<Vec3, 8> verts = {
+          Vec3{-hx, -hy, -hz}, Vec3{hx, -hy, -hz},  Vec3{hx, hy, -hz},
+          Vec3{-hx, hy, -hz},  Vec3{-hx, -hy, hz},  Vec3{hx, -hy, hz},
+          Vec3{hx, hy, hz},    Vec3{-hx, hy, hz},
+      };
+
+      for (Vec3& v : verts) {
+        v = ApplyTransform(v);
+        v.x += static_cast<double>(cx);
+        v.y += static_cast<double>(cy);
+        v.z += static_cast<double>(cz);
+      }
+
+      static const std::array<std::array<int, 4>, 6> faces = {{
+          {0, 1, 2, 3},
+          {4, 5, 6, 7},
+          {0, 1, 5, 4},
+          {2, 3, 7, 6},
+          {1, 2, 6, 5},
+          {0, 3, 7, 4},
+      }};
+
+      for (const auto& f : faces) {
+        auto sv0 = ProjectVertex(verts[static_cast<std::size_t>(f[0])]);
+        auto sv1 = ProjectVertex(verts[static_cast<std::size_t>(f[1])]);
+        auto sv2 = ProjectVertex(verts[static_cast<std::size_t>(f[2])]);
+        auto sv3 = ProjectVertex(verts[static_cast<std::size_t>(f[3])]);
+        if (!sv0.has_value() || !sv1.has_value() || !sv2.has_value() ||
+            !sv3.has_value()) {
+          continue;
+        }
+
+        // Backface culling in screen space
+        const int ax = sv1->x - sv0->x;
+        const int ay = sv1->y - sv0->y;
+        const int bx = sv2->x - sv0->x;
+        const int by = sv2->y - sv0->y;
+        const int cross = ax * by - ay * bx;
+        if (cross >= 0) {
+          continue;
+        }
+
+        int shade = 255 - static_cast<int>((sv0->z + sv1->z + sv2->z + sv3->z) / 4.0 / 40.0);
+        if (shade < 55) shade = 55;
+        if (shade > 255) shade = 255;
+        const int sr = (ClampColor(r) * shade) / 255;
+        const int sg = (ClampColor(g) * shade) / 255;
+        const int sb = (ClampColor(b) * shade) / 255;
+
+        FillTriangleDepth(*sv0, *sv1, *sv2, sr, sg, sb);
+        FillTriangleDepth(*sv0, *sv2, *sv3, sr, sg, sb);
+      }
+    }
+
+    void CubeSprite(int cx, int cy, int cz, int size, int sprite_id) {
+      if (size <= 0) {
+        return;
+      }
+      CuboidSprite(cx, cy, cz, size, size, size, sprite_id);
+    }
+
+    void CuboidSprite(int cx, int cy, int cz, int sx, int sy, int sz,
+                      int sprite_id) {
+      RequireGfx("gx3d.cuboid_sprite");
+      if (sx <= 0 || sy <= 0 || sz <= 0) {
+        return;
+      }
+      const GraphicsState::SpriteAsset& spr =
+          gfx_.GetSpriteAsset(sprite_id, "gx3d.cuboid_sprite");
+      if (spr.width <= 0 || spr.height <= 0) {
+        return;
+      }
+      EnsureDepthBuffer();
+
+      const double hx = static_cast<double>(sx) / 2.0;
+      const double hy = static_cast<double>(sy) / 2.0;
+      const double hz = static_cast<double>(sz) / 2.0;
+      std::array<Vec3, 8> verts = {
+          Vec3{-hx, -hy, -hz}, Vec3{hx, -hy, -hz},  Vec3{hx, hy, -hz},
+          Vec3{-hx, hy, -hz},  Vec3{-hx, -hy, hz},  Vec3{hx, -hy, hz},
+          Vec3{hx, hy, hz},    Vec3{-hx, hy, hz},
+      };
+      for (Vec3& v : verts) {
+        v = ApplyTransform(v);
+        v.x += static_cast<double>(cx);
+        v.y += static_cast<double>(cy);
+        v.z += static_cast<double>(cz);
+      }
+
+      static const std::array<std::array<int, 4>, 6> faces = {{
+          {0, 1, 2, 3},
+          {4, 5, 6, 7},
+          {0, 1, 5, 4},
+          {2, 3, 7, 6},
+          {1, 2, 6, 5},
+          {0, 3, 7, 4},
+      }};
+
+      static const std::array<std::pair<double, double>, 4> uv = {{
+          {0.0, 0.0},
+          {1.0, 0.0},
+          {1.0, 1.0},
+          {0.0, 1.0},
+      }};
+
+      for (const auto& f : faces) {
+        auto s0 = ProjectVertexUv(verts[static_cast<std::size_t>(f[0])], uv[0].first,
+                                  uv[0].second);
+        auto s1 = ProjectVertexUv(verts[static_cast<std::size_t>(f[1])], uv[1].first,
+                                  uv[1].second);
+        auto s2 = ProjectVertexUv(verts[static_cast<std::size_t>(f[2])], uv[2].first,
+                                  uv[2].second);
+        auto s3 = ProjectVertexUv(verts[static_cast<std::size_t>(f[3])], uv[3].first,
+                                  uv[3].second);
+        if (!s0.has_value() || !s1.has_value() || !s2.has_value() ||
+            !s3.has_value()) {
+          continue;
+        }
+
+        const int ax = s1->x - s0->x;
+        const int ay = s1->y - s0->y;
+        const int bx = s2->x - s0->x;
+        const int by = s2->y - s0->y;
+        const int cross = ax * by - ay * bx;
+        if (cross >= 0) {
+          continue;
+        }
+
+        FillTriangleDepthTextured(*s0, *s1, *s2, spr);
+        FillTriangleDepthTextured(*s0, *s2, *s3, spr);
+      }
+    }
+
     void Axis(int len) {
       RequireGfx("gx3d.axis");
       if (len <= 0) {
@@ -1391,6 +1879,14 @@ class VM {
     }
 
     std::optional<std::pair<int, int>> Project(const Vec3& world) const {
+      auto sv = ProjectVertex(world);
+      if (!sv.has_value()) {
+        return std::nullopt;
+      }
+      return std::pair<int, int>{sv->x, sv->y};
+    }
+
+    std::optional<ScreenVertex> ProjectVertex(const Vec3& world) const {
       const double x = world.x - cam_.x;
       const double y = world.y - cam_.y;
       const double z = world.z - cam_.z;
@@ -1400,8 +1896,146 @@ class VM {
 
       const double sx = (x / z) * fov_ + static_cast<double>(gfx_.Width()) / 2.0;
       const double sy = (-y / z) * fov_ + static_cast<double>(gfx_.Height()) / 2.0;
-      return std::pair<int, int>{static_cast<int>(std::round(sx)),
-                                 static_cast<int>(std::round(sy))};
+      return ScreenVertex{static_cast<int>(std::round(sx)),
+                          static_cast<int>(std::round(sy)), z};
+    }
+
+    std::optional<ScreenVertexUv> ProjectVertexUv(const Vec3& world, double u,
+                                                  double v) const {
+      auto base = ProjectVertex(world);
+      if (!base.has_value()) {
+        return std::nullopt;
+      }
+      return ScreenVertexUv{base->x, base->y, base->z, u, v};
+    }
+
+    void EnsureDepthBuffer() {
+      const std::size_t need =
+          static_cast<std::size_t>(gfx_.Width() * gfx_.Height());
+      if (depth_.size() != need) {
+        depth_.assign(need, 1e30);
+        depth_dirty_ = false;
+        return;
+      }
+      if (depth_dirty_) {
+        std::fill(depth_.begin(), depth_.end(), 1e30);
+        depth_dirty_ = false;
+      }
+    }
+
+    void FillTriangleDepth(const ScreenVertex& a, const ScreenVertex& b,
+                           const ScreenVertex& c, int r, int g, int bl) {
+      int min_x = std::min(a.x, std::min(b.x, c.x));
+      int max_x = std::max(a.x, std::max(b.x, c.x));
+      int min_y = std::min(a.y, std::min(b.y, c.y));
+      int max_y = std::max(a.y, std::max(b.y, c.y));
+
+      min_x = std::max(0, min_x);
+      min_y = std::max(0, min_y);
+      max_x = std::min(gfx_.Width() - 1, max_x);
+      max_y = std::min(gfx_.Height() - 1, max_y);
+      if (min_x > max_x || min_y > max_y) {
+        return;
+      }
+
+      const double denom =
+          static_cast<double>((b.y - c.y) * (a.x - c.x) +
+                              (c.x - b.x) * (a.y - c.y));
+      if (std::abs(denom) < 1e-9) {
+        return;
+      }
+
+      for (int y = min_y; y <= max_y; ++y) {
+        for (int x = min_x; x <= max_x; ++x) {
+          const double px = static_cast<double>(x) + 0.5;
+          const double py = static_cast<double>(y) + 0.5;
+          const double w1 = ((b.y - c.y) * (px - c.x) + (c.x - b.x) * (py - c.y)) / denom;
+          const double w2 = ((c.y - a.y) * (px - c.x) + (a.x - c.x) * (py - c.y)) / denom;
+          const double w3 = 1.0 - w1 - w2;
+          if (w1 < 0.0 || w2 < 0.0 || w3 < 0.0) {
+            continue;
+          }
+
+          const double z = w1 * a.z + w2 * b.z + w3 * c.z;
+          const std::size_t idx =
+              static_cast<std::size_t>(y * gfx_.Width() + x);
+          if (z < depth_[idx]) {
+            depth_[idx] = z;
+            gfx_.PixelAtFast(x, y, r, g, bl);
+          }
+        }
+      }
+    }
+
+    void FillTriangleDepthTextured(const ScreenVertexUv& a,
+                                   const ScreenVertexUv& b,
+                                   const ScreenVertexUv& c,
+                                   const GraphicsState::SpriteAsset& spr) {
+      int min_x = std::min(a.x, std::min(b.x, c.x));
+      int max_x = std::max(a.x, std::max(b.x, c.x));
+      int min_y = std::min(a.y, std::min(b.y, c.y));
+      int max_y = std::max(a.y, std::max(b.y, c.y));
+
+      min_x = std::max(0, min_x);
+      min_y = std::max(0, min_y);
+      max_x = std::min(gfx_.Width() - 1, max_x);
+      max_y = std::min(gfx_.Height() - 1, max_y);
+      if (min_x > max_x || min_y > max_y) {
+        return;
+      }
+
+      const double denom =
+          static_cast<double>((b.y - c.y) * (a.x - c.x) +
+                              (c.x - b.x) * (a.y - c.y));
+      if (std::abs(denom) < 1e-9) {
+        return;
+      }
+
+      for (int y = min_y; y <= max_y; ++y) {
+        for (int x = min_x; x <= max_x; ++x) {
+          const double px = static_cast<double>(x) + 0.5;
+          const double py = static_cast<double>(y) + 0.5;
+          const double w1 =
+              ((b.y - c.y) * (px - c.x) + (c.x - b.x) * (py - c.y)) / denom;
+          const double w2 =
+              ((c.y - a.y) * (px - c.x) + (a.x - c.x) * (py - c.y)) / denom;
+          const double w3 = 1.0 - w1 - w2;
+          if (w1 < 0.0 || w2 < 0.0 || w3 < 0.0) {
+            continue;
+          }
+
+          const double z = w1 * a.z + w2 * b.z + w3 * c.z;
+          const std::size_t idx =
+              static_cast<std::size_t>(y * gfx_.Width() + x);
+          if (z >= depth_[idx]) {
+            continue;
+          }
+
+          const double u = w1 * a.u + w2 * b.u + w3 * c.u;
+          const double v = w1 * a.v + w2 * b.v + w3 * c.v;
+          int tx = static_cast<int>(u * static_cast<double>(spr.width - 1));
+          int ty = static_cast<int>(v * static_cast<double>(spr.height - 1));
+          tx = std::max(0, std::min(spr.width - 1, tx));
+          ty = std::max(0, std::min(spr.height - 1, ty));
+          const auto& t = spr.texels[static_cast<std::size_t>(ty * spr.width + tx)];
+          if (t.a == 0) {
+            continue;
+          }
+          depth_[idx] = z;
+          if (t.a == 255) {
+            gfx_.PixelAtFast(x, y, static_cast<int>(t.r), static_cast<int>(t.g),
+                             static_cast<int>(t.b));
+          } else {
+            // Translucent texels blend with current framebuffer color.
+            const auto base_idx = static_cast<std::size_t>(y * gfx_.Width() + x);
+            Pixel& out = gfx_.pixels[base_idx];
+            const int a8 = static_cast<int>(t.a);
+            out.r = (static_cast<int>(t.r) * a8 + out.r * (255 - a8)) / 255;
+            out.g = (static_cast<int>(t.g) * a8 + out.g * (255 - a8)) / 255;
+            out.b = (static_cast<int>(t.b) * a8 + out.b * (255 - a8)) / 255;
+          }
+        }
+      }
     }
 
     GraphicsState& gfx_;
@@ -1411,6 +2045,8 @@ class VM {
     double fov_ = 300.0;
     double near_clip_ = 1.0;
     double far_clip_ = 10000.0;
+    std::vector<double> depth_;
+    bool depth_dirty_ = true;
 
     static int ClampColor(int v) { return std::max(0, std::min(255, v)); }
 
@@ -1490,10 +2126,114 @@ class VM {
       stack_.push_back(0);
       return;
     }
+    if (name == "random.seed") {
+      ExpectArgc(name, argc, 1);
+      const int seed = ValueAsInt(args[0], name);
+      random_seed_ = static_cast<std::uint32_t>(seed);
+      rng_.seed(random_seed_);
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "random.randint") {
+      ExpectArgc(name, argc, 2);
+      int lo = ValueAsInt(args[0], name);
+      int hi = ValueAsInt(args[1], name);
+      if (lo > hi) {
+        std::swap(lo, hi);
+      }
+      std::uniform_int_distribution<int> dist(lo, hi);
+      stack_.push_back(dist(rng_));
+      return;
+    }
+    if (name == "random.randrange") {
+      ExpectArgc(name, argc, 2);
+      int start = ValueAsInt(args[0], name);
+      int stop = ValueAsInt(args[1], name);
+      if (stop <= start) {
+        throw std::runtime_error("random.randrange expects stop > start");
+      }
+      std::uniform_int_distribution<int> dist(start, stop - 1);
+      stack_.push_back(dist(rng_));
+      return;
+    }
+    if (name == "random.random") {
+      ExpectArgc(name, argc, 0);
+      // py++ currently has integer values only, so this returns a fixed-point
+      // random value in [0, 1_000_000].
+      std::uniform_int_distribution<int> dist(0, 1000000);
+      stack_.push_back(dist(rng_));
+      return;
+    }
+    if (name == "random.chance") {
+      ExpectArgc(name, argc, 1);
+      int pct = ValueAsInt(args[0], name);
+      if (pct <= 0) {
+        stack_.push_back(0);
+        return;
+      }
+      if (pct >= 100) {
+        stack_.push_back(1);
+        return;
+      }
+      std::uniform_int_distribution<int> dist(0, 99);
+      stack_.push_back(dist(rng_) < pct ? 1 : 0);
+      return;
+    }
+    if (name == "noise.seed") {
+      ExpectArgc(name, argc, 1);
+      noise_seed_ = static_cast<std::uint32_t>(ValueAsInt(args[0], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "noise.value2") {
+      ExpectArgc(name, argc, 2);
+      stack_.push_back(NoiseValue2(ValueAsInt(args[0], name),
+                                   ValueAsInt(args[1], name)));
+      return;
+    }
+    if (name == "noise.value3") {
+      ExpectArgc(name, argc, 3);
+      stack_.push_back(NoiseValue3(ValueAsInt(args[0], name),
+                                   ValueAsInt(args[1], name),
+                                   ValueAsInt(args[2], name)));
+      return;
+    }
+    if (name == "noise.smooth2") {
+      ExpectArgc(name, argc, 3);
+      const int scale = ValueAsInt(args[2], name);
+      if (scale <= 0) {
+        throw std::runtime_error("noise.smooth2 expects scale > 0");
+      }
+      stack_.push_back(NoiseSmooth2(ValueAsInt(args[0], name),
+                                    ValueAsInt(args[1], name), scale));
+      return;
+    }
+    if (name == "noise.fractal2") {
+      ExpectArgc(name, argc, 5);
+      const int x = ValueAsInt(args[0], name);
+      const int y = ValueAsInt(args[1], name);
+      const int scale = ValueAsInt(args[2], name);
+      const int octaves = ValueAsInt(args[3], name);
+      const int persistence_pct = ValueAsInt(args[4], name);
+      if (scale <= 0) {
+        throw std::runtime_error("noise.fractal2 expects scale > 0");
+      }
+      if (octaves <= 0) {
+        throw std::runtime_error("noise.fractal2 expects octaves > 0");
+      }
+      if (persistence_pct <= 0 || persistence_pct > 100) {
+        throw std::runtime_error(
+            "noise.fractal2 expects persistence in range 1..100");
+      }
+      stack_.push_back(
+          NoiseFractal2(x, y, scale, octaves, persistence_pct));
+      return;
+    }
 
     if (name == "gfx.open") {
       ExpectArgc(name, argc, 2);
       gfx_.Open(ValueAsInt(args[0], name), ValueAsInt(args[1], name));
+      gx3d_.OnFrameReset();
       stack_.push_back(0);
       return;
     }
@@ -1501,6 +2241,7 @@ class VM {
       ExpectArgc(name, argc, 3);
       gfx_.Clear(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
                  ValueAsInt(args[2], name));
+      gx3d_.OnFrameReset();
       stack_.push_back(0);
       return;
     }
@@ -1582,6 +2323,26 @@ class VM {
       }
       gfx_.OpenWindow(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
                       std::get<std::string>(args[2]));
+      gx3d_.OnFrameReset();
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.window_ratio") {
+      ExpectArgc(name, argc, 5);
+      if (!std::holds_alternative<std::string>(args[4])) {
+        throw std::runtime_error(
+            "gfx.window_ratio expects title string as fifth argument");
+      }
+      gfx_.OpenWindowRatio(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                           ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+                           std::get<std::string>(args[4]));
+      gx3d_.OnFrameReset();
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.keep_aspect") {
+      ExpectArgc(name, argc, 1);
+      gfx_.SetKeepAspect(ValueAsInt(args[0], name));
       stack_.push_back(0);
       return;
     }
@@ -1598,6 +2359,51 @@ class VM {
     if (name == "gfx.key_down") {
       ExpectArgc(name, argc, 1);
       stack_.push_back(gfx_.KeyDown(ValueAsInt(args[0], name)));
+      return;
+    }
+    if (name == "gfx.mouse_x") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(gfx_.MouseX());
+      return;
+    }
+    if (name == "gfx.mouse_y") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(gfx_.MouseY());
+      return;
+    }
+    if (name == "gfx.mouse_down") {
+      ExpectArgc(name, argc, 1);
+      stack_.push_back(gfx_.MouseDown(ValueAsInt(args[0], name)));
+      return;
+    }
+    if (name == "gfx.mouse_dx") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(gfx_.ConsumeMouseDX());
+      return;
+    }
+    if (name == "gfx.mouse_dy") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(gfx_.ConsumeMouseDY());
+      return;
+    }
+    if (name == "gfx.mouse_lock") {
+      ExpectArgc(name, argc, 1);
+      gfx_.SetMouseLock(ValueAsInt(args[0], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.mouse_show") {
+      ExpectArgc(name, argc, 1);
+      gfx_.SetMouseVisible(ValueAsInt(args[0], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.button") {
+      ExpectArgc(name, argc, 4);
+      stack_.push_back(gfx_.Button(ValueAsInt(args[0], name),
+                                   ValueAsInt(args[1], name),
+                                   ValueAsInt(args[2], name),
+                                   ValueAsInt(args[3], name)));
       return;
     }
     if (name == "gfx.closed") {
@@ -1725,6 +2531,15 @@ class VM {
       stack_.push_back(0);
       return;
     }
+    if (name == "gx3d.cube_solid") {
+      ExpectArgc(name, argc, 7);
+      gx3d_.CubeSolid(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                      ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+                      ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+                      ValueAsInt(args[6], name));
+      stack_.push_back(0);
+      return;
+    }
     if (name == "gx3d.cuboid") {
       ExpectArgc(name, argc, 9);
       gx3d_.Cuboid(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
@@ -1732,6 +2547,33 @@ class VM {
                    ValueAsInt(args[4], name), ValueAsInt(args[5], name),
                    ValueAsInt(args[6], name), ValueAsInt(args[7], name),
                    ValueAsInt(args[8], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.cuboid_solid") {
+      ExpectArgc(name, argc, 9);
+      gx3d_.CuboidSolid(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                        ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+                        ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+                        ValueAsInt(args[6], name), ValueAsInt(args[7], name),
+                        ValueAsInt(args[8], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.cube_sprite") {
+      ExpectArgc(name, argc, 5);
+      gx3d_.CubeSprite(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                       ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+                       ValueAsInt(args[4], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.cuboid_sprite") {
+      ExpectArgc(name, argc, 7);
+      gx3d_.CuboidSprite(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                         ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+                         ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+                         ValueAsInt(args[6], name));
       stack_.push_back(0);
       return;
     }
@@ -1772,6 +2614,94 @@ class VM {
     vars_[alias] = module_obj;
   }
 
+  static std::uint32_t HashU32(std::uint32_t x) {
+    x ^= x >> 16;
+    x *= 0x7feb352dU;
+    x ^= x >> 15;
+    x *= 0x846ca68bU;
+    x ^= x >> 16;
+    return x;
+  }
+
+  static double Fade(double t) {
+    return t * t * (3.0 - 2.0 * t);
+  }
+
+  static int ClampByte(int v) { return std::max(0, std::min(255, v)); }
+
+  static int FloorDiv(int a, int b) {
+    int q = a / b;
+    int r = a % b;
+    if (r != 0 && ((r > 0) != (b > 0))) {
+      q -= 1;
+    }
+    return q;
+  }
+
+  static int PosMod(int a, int b) {
+    int m = a % b;
+    if (m < 0) {
+      m += std::abs(b);
+    }
+    return m;
+  }
+
+  int NoiseValue2(int x, int y) const {
+    std::uint32_t h = HashU32(static_cast<std::uint32_t>(x) * 0x9E3779B9U ^
+                              static_cast<std::uint32_t>(y) * 0x85EBCA6BU ^
+                              noise_seed_);
+    return static_cast<int>(h & 255U);
+  }
+
+  int NoiseValue3(int x, int y, int z) const {
+    std::uint32_t h = HashU32(static_cast<std::uint32_t>(x) * 0x9E3779B9U ^
+                              static_cast<std::uint32_t>(y) * 0x85EBCA6BU ^
+                              static_cast<std::uint32_t>(z) * 0xC2B2AE35U ^
+                              noise_seed_);
+    return static_cast<int>(h & 255U);
+  }
+
+  int NoiseSmooth2(int x, int y, int scale) const {
+    const int cell_x = FloorDiv(x, scale);
+    const int cell_y = FloorDiv(y, scale);
+    const int frac_x = PosMod(x, scale);
+    const int frac_y = PosMod(y, scale);
+
+    const double tx = static_cast<double>(frac_x) / static_cast<double>(scale);
+    const double ty = static_cast<double>(frac_y) / static_cast<double>(scale);
+    const double ux = Fade(tx);
+    const double uy = Fade(ty);
+
+    const double v00 = static_cast<double>(NoiseValue2(cell_x, cell_y));
+    const double v10 = static_cast<double>(NoiseValue2(cell_x + 1, cell_y));
+    const double v01 = static_cast<double>(NoiseValue2(cell_x, cell_y + 1));
+    const double v11 = static_cast<double>(NoiseValue2(cell_x + 1, cell_y + 1));
+    const double a = v00 * (1.0 - ux) + v10 * ux;
+    const double b = v01 * (1.0 - ux) + v11 * ux;
+    return ClampByte(static_cast<int>(std::round(a * (1.0 - uy) + b * uy)));
+  }
+
+  int NoiseFractal2(int x, int y, int base_scale, int octaves,
+                    int persistence_pct) const {
+    double amp = 1.0;
+    double sum = 0.0;
+    double norm = 0.0;
+    int scale = base_scale;
+    for (int i = 0; i < octaves; ++i) {
+      if (scale <= 0) {
+        break;
+      }
+      sum += static_cast<double>(NoiseSmooth2(x, y, scale)) * amp;
+      norm += amp;
+      scale = std::max(1, scale / 2);
+      amp *= static_cast<double>(persistence_pct) / 100.0;
+    }
+    if (norm <= 0.0) {
+      return 0;
+    }
+    return ClampByte(static_cast<int>(std::round(sum / norm)));
+  }
+
   static void ExpectArgc(const std::string& name, int argc, int expected) {
     if (argc != expected) {
       throw std::runtime_error(name + " expects " + std::to_string(expected) +
@@ -1784,6 +2714,9 @@ class VM {
   GraphicsState gfx_;
   Gx3dState gx3d_{gfx_};
   std::filesystem::path module_base_;
+  std::uint32_t random_seed_ = 1337U;
+  std::mt19937 rng_{random_seed_};
+  std::uint32_t noise_seed_ = 12345U;
 };
 
 std::string ReadFile(const std::filesystem::path& file) {

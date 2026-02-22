@@ -1,0 +1,18 @@
+random.seed(42)
+noise.seed(1337)
+
+print("randint(1,6):", random.randint(1, 6))
+print("randrange(10,20):", random.randrange(10, 20))
+print("random.random fixed:", random.random())
+print("chance(25):", random.chance(25))
+
+let y = 0
+while y < 6:
+  let x = 0
+  while x < 8:
+    let n = noise.fractal2(x * 32, y * 32, 64, 4, 60)
+    print("n", x, y, n)
+    let x = x + 1
+  end
+  let y = y + 1
+end

@@ -17,12 +17,29 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - object literals + field access:
     - `let p = { name: "Rhea", hp: 100 }`
     - `print(p.name, p.hp)`
+- Built-in Utility-Module:
+  - `random.seed(seed)`
+  - `random.randint(min, max)` (inklusive Grenzen)
+  - `random.randrange(start, stop)` (stop exklusiv)
+  - `random.random()` (integer fixed-point `0..1000000`)
+  - `random.chance(percent)` (`0|1`)
+  - `noise.seed(seed)`
+  - `noise.value2(x, y)`, `noise.value3(x, y, z)` (`0..255`)
+  - `noise.smooth2(x, y, scale)` (`0..255`)
+  - `noise.fractal2(x, y, scale, octaves, persistence_pct)` (`0..255`)
 - Built-in Graphics-Modul:
   - `gfx.open(w, h)`
   - `gfx.window(w, h, "title")` (live window)
+  - `gfx.window_ratio(w, h, ratio_w, ratio_h, "title")`
+  - `gfx.keep_aspect(0|1)`
   - `gfx.poll()`
   - `gfx.present()`
   - `gfx.key_down(keycode)`
+  - `gfx.mouse_x()`, `gfx.mouse_y()`
+  - `gfx.mouse_down(button)` (`0` left, `1` right, `2` middle)
+  - `gfx.mouse_dx()`, `gfx.mouse_dy()` (delta since last call)
+  - `gfx.mouse_lock(0|1)`, `gfx.mouse_show(0|1)`
+  - `gfx.button(x, y, w, h)` (draws simple button, returns `1` on click)
   - `gfx.closed()`
   - `gfx.close()`
   - `gfx.load_sprite("assets/player.png")`
@@ -49,7 +66,11 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gx3d.point(x, y, z, r, g, b)`
   - `gx3d.line(x1, y1, z1, x2, y2, z2, r, g, b)`
   - `gx3d.cube(x, y, z, size, r, g, b)`
+  - `gx3d.cube_solid(x, y, z, size, r, g, b)`
   - `gx3d.cuboid(x, y, z, sx, sy, sz, r, g, b)`
+  - `gx3d.cuboid_solid(x, y, z, sx, sy, sz, r, g, b)`
+  - `gx3d.cube_sprite(x, y, z, size, sprite_id)`
+  - `gx3d.cuboid_sprite(x, y, z, sx, sy, sz, sprite_id)`
   - `gx3d.axis(length)`
   - `gx3d.grid(size, step, y)`
 
@@ -93,9 +114,12 @@ Hinweis:
 .\build\pypp.exe run examples\graphics.pypp
 .\build\pypp.exe run examples\pong_game.pypp
 .\build\pypp.exe run examples\pong_live.pypp
+.\build\pypp.exe run examples\menu_demo.pypp
 .\build\pypp.exe run examples\gx3d_frame.pypp
 .\build\pypp.exe run examples\gx3d_live.pypp
+.\build\pypp.exe run examples\random_noise.pypp
 .\build\pypp.exe run examples\import_objects_demo.pypp
+.\build\pypp.exe run projects\mini_minecraft\main.pypp
 ```
 
 ## Modules

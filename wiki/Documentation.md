@@ -49,6 +49,37 @@ Adds runtime folder to user PATH (Windows behavior).
 
 Prints runtime/compiler version.
 
+## New Runtime APIs (0.4.x graphics stack)
+
+### `gfx` additions
+
+- `gfx.window_ratio(w, h, ratio_w, ratio_h, "title")`
+- `gfx.keep_aspect(enabled)`
+- `gfx.mouse_x()`, `gfx.mouse_y()`
+- `gfx.mouse_down(button)`
+- `gfx.mouse_dx()`, `gfx.mouse_dy()`
+- `gfx.mouse_lock(enabled)`
+- `gfx.mouse_show(visible)`
+- `gfx.button(x, y, w, h)`
+
+### `gx3d` additions
+
+- `gx3d.cube_sprite(x, y, z, size, sprite_id)`
+- `gx3d.cuboid_sprite(x, y, z, sx, sy, sz, sprite_id)`
+
+### `random` + `noise` standard utilities
+
+- `random.seed(seed)`
+- `random.randint(min, max)`
+- `random.randrange(start, stop)`
+- `random.random()` (fixed-point int `0..1000000`)
+- `random.chance(percent)`
+- `noise.seed(seed)`
+- `noise.value2(x, y)`
+- `noise.value3(x, y, z)`
+- `noise.smooth2(x, y, scale)`
+- `noise.fractal2(x, y, scale, octaves, persistence_pct)`
+
 ## Language Syntax
 
 ### Variables
@@ -116,6 +147,7 @@ Notes:
 
 - [[Graphics]] for 2D and live loop
 - [[3D-Graphics]] for wireframe projection and cubes
+- [[Random-Noise]] for procedural utilities
 
 ## 3D Quick Reference
 
@@ -131,7 +163,9 @@ High-use `gx3d` calls:
 - `gx3d.point(...)`
 - `gx3d.line(...)`
 - `gx3d.cube(...)`
+- `gx3d.cube_solid(...)`
 - `gx3d.cuboid(...)`
+- `gx3d.cuboid_solid(...)`
 - `gx3d.axis(len)`
 - `gx3d.grid(size, step, y)`
 
@@ -166,5 +200,5 @@ Recommended render order:
 ```
 
 Back: [[3D-Graphics]]  
-Next: [[Extras]]  
+Next: [[Random-Noise]]  
 Home: [[Home]]

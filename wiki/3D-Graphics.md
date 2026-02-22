@@ -35,8 +35,16 @@ It projects 3D primitives into the active `gfx` framebuffer/window with configur
   - Draws one 3D line segment
 - `gx3d.cube(x, y, z, size, r, g, b)`
   - Draws wireframe cube centered at `(x,y,z)`
+- `gx3d.cube_solid(x, y, z, size, r, g, b)`
+  - Draws filled cube faces (depth-tested)
 - `gx3d.cuboid(x, y, z, sx, sy, sz, r, g, b)`
   - Draws wireframe cuboid
+- `gx3d.cuboid_solid(x, y, z, sx, sy, sz, r, g, b)`
+  - Draws filled cuboid faces (depth-tested)
+- `gx3d.cube_sprite(x, y, z, size, sprite_id)`
+  - Draws a textured cube using a loaded `gfx` sprite
+- `gx3d.cuboid_sprite(x, y, z, sx, sy, sz, sprite_id)`
+  - Draws a textured cuboid using a loaded `gfx` sprite
 - `gx3d.axis(len)`
   - Draws world axes
 - `gx3d.grid(size, step, y)`
@@ -88,8 +96,9 @@ gfx.present()
 ## Current Limits
 
 - no filled triangles
-- no depth buffer
-- no textures/materials/lights
+- depth is currently used for solid cuboids/cubes only
+- textured cube/cuboid support is sprite-based (nearest sampling)
+- no dynamic lights/material system yet
 - no mesh importer yet
 
 ## Stability Notes
@@ -98,6 +107,7 @@ gfx.present()
 - Colors are clamped to `0..255`.
 - Invalid clip settings (`near <= 0`, `far <= near`) throw descriptive runtime errors.
 - Out-of-view segments are clipped by near/far projection rejection.
+- Depth buffer resets automatically when `gfx.clear(...)` is called.
 
 ## Planned Next 3D Steps
 

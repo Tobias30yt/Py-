@@ -15,6 +15,10 @@ It supports:
   - Creates an offscreen surface (no window)
 - `gfx.window(w, h, "title")`
   - Creates a live window + render target
+- `gfx.window_ratio(w, h, ratio_w, ratio_h, "title")`
+  - Creates a resizable window with fixed aspect ratio behavior
+- `gfx.keep_aspect(0|1)`
+  - Enables/disables letterboxed aspect-preserving presentation
 - `gfx.poll()`
   - Processes window/input events
 - `gfx.present()`
@@ -28,6 +32,16 @@ It supports:
 
 - `gfx.key_down(keycode)`
   - Returns `1` while key is pressed, else `0`
+- `gfx.mouse_x()`, `gfx.mouse_y()`
+  - Current mouse position in client coordinates
+- `gfx.mouse_down(button)`
+  - Mouse button state (`0` left, `1` right, `2` middle)
+- `gfx.mouse_dx()`, `gfx.mouse_dy()`
+  - Relative mouse movement since last call
+- `gfx.mouse_lock(0|1)`, `gfx.mouse_show(0|1)`
+  - FPS-style mouse lock and cursor visibility control
+- `gfx.button(x, y, w, h)`
+  - Draws a simple button and returns `1` on click
 
 See keycode reference in [[Extras]].
 
@@ -91,6 +105,7 @@ end
 - `examples/pong_live.pypp`
 - `examples/pong_game.pypp` (frame export style)
 - `examples/sprite_demo.pypp`
+- `examples/menu_demo.pypp`
 
 Back: [[Home]]  
 Next: [[3D-Graphics]]  

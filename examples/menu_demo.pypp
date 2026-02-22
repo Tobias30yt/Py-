@@ -1,0 +1,32 @@
+gfx.window_ratio(960, 540, 16, 9, "py++ menu demo")
+gfx.keep_aspect(1)
+gfx.mouse_show(1)
+
+let scene = 0
+
+while gfx.closed() == 0:
+  gfx.poll()
+  if gfx.key_down(27) == 1:
+    gfx.close()
+  end
+
+  if scene == 0:
+    gfx.clear(20, 28, 48)
+    if gfx.button(360, 190, 240, 56) == 1:
+      let scene = 1
+    end
+    if gfx.button(360, 270, 240, 56) == 1:
+      gfx.close()
+    end
+  end
+
+  if scene == 1:
+    gfx.clear(16, 44, 28)
+    if gfx.button(24, 24, 180, 46) == 1:
+      let scene = 0
+    end
+  end
+
+  gfx.present()
+  time.sleep_ms(16)
+end

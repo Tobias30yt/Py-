@@ -1,0 +1,18 @@
+let key_escape = 27
+
+let key_w = 87
+let key_a = 65
+let key_s = 83
+let key_d = 68
+
+let key_q = 81
+let key_e = 69
+
+let key_r = 82
+let key_f = 70
+
+let key_up = 38
+let key_down = 40
+let key_left = 37
+let key_right = 39
+

@@ -1,0 +1,139 @@
+import settings as s
+import controls as c
+
+gfx.window_ratio(s.width, s.height, 16, 9, "py++ mini minecraft")
+gfx.keep_aspect(1)
+gfx.mouse_lock(1)
+gfx.mouse_show(0)
+gx3d.reset()
+gx3d.fov(s.fov)
+gx3d.clip(s.near_clip, s.far_clip)
+gx3d.camera(0, 0, -820)
+
+let yaw = 0
+let tick = 0
+let sky_mode = 0
+
+while gfx.closed() == 0:
+  gfx.poll()
+
+  if gfx.key_down(c.key_escape) == 1:
+    gfx.mouse_lock(0)
+    gfx.mouse_show(1)
+    gfx.close()
+  end
+
+  let mdx = gfx.mouse_dx()
+  let yaw = yaw + mdx / 2
+
+  if gfx.button(20, 20, 140, 34) == 1:
+    let sky_mode = 1 - sky_mode
+  end
+
+  # Camera movement (world-space for now, simple and stable)
+  if gfx.key_down(c.key_w) == 1:
+    gx3d.camera_move(0, 0, s.move_speed)
+  end
+  if gfx.key_down(c.key_s) == 1:
+    gx3d.camera_move(0, 0, -s.move_speed)
+  end
+  if gfx.key_down(c.key_a) == 1:
+    gx3d.camera_move(-s.move_speed, 0, 0)
+  end
+  if gfx.key_down(c.key_d) == 1:
+    gx3d.camera_move(s.move_speed, 0, 0)
+  end
+  if gfx.key_down(c.key_r) == 1:
+    gx3d.camera_move(0, s.fly_speed, 0)
+  end
+  if gfx.key_down(c.key_f) == 1:
+    gx3d.camera_move(0, -s.fly_speed, 0)
+  end
+
+  # Rotation controls
+  if gfx.key_down(c.key_q) == 1:
+    let yaw = yaw - s.turn_speed
+  end
+  if gfx.key_down(c.key_e) == 1:
+    let yaw = yaw + s.turn_speed
+  end
+  if gfx.key_down(c.key_left) == 1:
+    let yaw = yaw - s.turn_speed
+  end
+  if gfx.key_down(c.key_right) == 1:
+    let yaw = yaw + s.turn_speed
+  end
+
+  # Day/night pulse (or override via top-left button)
+  if sky_mode == 0:
+    let tick = tick + 1
+    let phase = tick / 150
+    let parity = phase - (phase / 2) * 2
+    if parity == 0:
+      gfx.clear(90, 145, 205)
+    end
+    if parity == 1:
+      gfx.clear(18, 22, 36)
+    end
+  end
+  if sky_mode == 1:
+    gfx.clear(18, 22, 36)
+  end
+
+  gx3d.rotate(0, yaw, 0)
+  gx3d.translate(0, 0, 0)
+
+  # Ground grid and axes
+  gx3d.grid(1200, s.block_size, s.ground_y)
+  gx3d.axis(120)
+
+  # Voxel terrain
+  let x = -s.world_radius_blocks * s.block_size
+  while x <= s.world_radius_blocks * s.block_size:
+    let z = -s.world_radius_blocks * s.block_size
+    while z <= s.world_radius_blocks * s.block_size:
+      let bx = x / s.block_size
+      let bz = z / s.block_size
+      let t = bx * bx + bz * bz
+
+      let h = 1
+      let ring = t / 7
+      let p = ring - (ring / 2) * 2
+      if p == 1:
+        let h = 2
+      end
+      if t < 25:
+        let h = 3
+      end
+      if t < 9:
+        let h = 4
+      end
+
+      let yi = 0
+      while yi < h:
+        let y = s.ground_y + yi * s.block_size
+        if yi == h - 1:
+          gx3d.cuboid_solid(x, y, z, s.block_size, s.block_size, s.block_size, 90, 180, 90)
+        end
+        if yi != h - 1:
+          gx3d.cuboid_solid(x, y, z, s.block_size, s.block_size, s.block_size, 130, 105, 80)
+        end
+        let yi = yi + 1
+      end
+
+      let z = z + s.block_size
+    end
+    let x = x + s.block_size
+  end
+
+  # A simple "tree"
+gx3d.cuboid_solid(0, s.ground_y + s.block_size * 4, 0, s.block_size / 2, s.block_size * 2, s.block_size / 2, 120, 90, 60)
+gx3d.cuboid_solid(0, s.ground_y + s.block_size * 6, 0, s.block_size * 2, s.block_size * 2, s.block_size * 2, 60, 140, 70)
+
+  # Center crosshair
+  gfx.line(s.width / 2 - 10, s.height / 2, s.width / 2 + 10, s.height / 2, 255, 255, 255)
+  gfx.line(s.width / 2, s.height / 2 - 10, s.width / 2, s.height / 2 + 10, 255, 255, 255)
+
+  gfx.present()
+  time.sleep_ms(16)
+end
