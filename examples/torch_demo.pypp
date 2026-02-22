@@ -1,0 +1,17 @@
+torch.seed(42)
+
+let a = torch.rand_int(-10, 10)
+let b = torch.rand_norm(500)
+print("rand_int", a, "rand_norm", b)
+
+let x = -1200
+print("relu", torch.relu(x))
+print("leaky_relu", torch.leaky_relu(x, 100000))
+print("sigmoid_ppm", torch.sigmoid(x))
+print("tanh_ppm", torch.tanh(x))
+
+let p = torch.dot3(2, 3, 4, 5, 6, 7)
+print("dot3", p)
+print("mse", torch.mse(900000, 1000000))
+print("lerp", torch.lerp(0, 1000, 250000))
+print("step", torch.step(1000, 120, 50000))

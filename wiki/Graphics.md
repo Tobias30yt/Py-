@@ -1,6 +1,6 @@
 # Graphics (`gfx`)
 
-`gfx` is the 2D rendering module for `py++`.
+`gfx` is the 2D rendering library for `py++`.
 
 It supports:
 - offscreen rendering + image export

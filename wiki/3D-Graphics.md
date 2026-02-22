@@ -1,11 +1,11 @@
 # 3D Graphics (`gx3d`)
 
-`gx3d` is the built-in wireframe 3D module in `py++`.
+`gx3d` is the built-in wireframe 3D library in `py++`.
 It projects 3D primitives into the active `gfx` framebuffer/window with configurable camera, clipping, and transform state.
 
 ## Rendering Model
 
-- Wireframe only (currently cubes)
+- Wireframe + basic solid primitives
 - Perspective projection
 - Camera translation
 - Object Euler rotation (degrees)
@@ -37,6 +37,10 @@ It projects 3D primitives into the active `gfx` framebuffer/window with configur
   - Draws wireframe cube centered at `(x,y,z)`
 - `gx3d.cube_solid(x, y, z, size, r, g, b)`
   - Draws filled cube faces (depth-tested)
+- `gx3d.pyramid(x, y, z, size, r, g, b)`
+  - Draws wireframe pyramid
+- `gx3d.pyramid_solid(x, y, z, size, r, g, b)`
+  - Draws filled pyramid faces (depth-tested)
 - `gx3d.cuboid(x, y, z, sx, sy, sz, r, g, b)`
   - Draws wireframe cuboid
 - `gx3d.cuboid_solid(x, y, z, sx, sy, sz, r, g, b)`
@@ -96,7 +100,7 @@ gfx.present()
 ## Current Limits
 
 - no filled triangles
-- depth is currently used for solid cuboids/cubes only
+- depth is currently used for solid cuboids/cubes/pyramids
 - textured cube/cuboid support is sprite-based (nearest sampling)
 - no dynamic lights/material system yet
 - no mesh importer yet

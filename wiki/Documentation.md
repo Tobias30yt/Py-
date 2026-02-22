@@ -66,6 +66,8 @@ Prints runtime/compiler version.
 
 - `gx3d.cube_sprite(x, y, z, size, sprite_id)`
 - `gx3d.cuboid_sprite(x, y, z, sx, sy, sz, sprite_id)`
+- `gx3d.pyramid(x, y, z, size, r, g, b)`
+- `gx3d.pyramid_solid(x, y, z, size, r, g, b)`
 
 ### `random` + `noise` standard utilities
 
@@ -79,6 +81,33 @@ Prints runtime/compiler version.
 - `noise.value3(x, y, z)`
 - `noise.smooth2(x, y, scale)`
 - `noise.fractal2(x, y, scale, octaves, persistence_pct)`
+
+### `net` multiplayer utilities (UDP, Windows)
+
+- `net.host(port)`
+- `net.join("127.0.0.1", port)`
+- `net.poll()`
+- `net.send_pose(x, y, z, yaw, pitch)`
+- `net.open()`
+- `net.has_remote()`
+- `net.has_state()`
+- `net.remote_x()`, `net.remote_y()`, `net.remote_z()`
+- `net.remote_yaw()`, `net.remote_pitch()`
+- `net.close()`
+
+### `torch` AI library (fixed-point/int friendly)
+
+- `torch.seed(seed)`
+- `torch.rand_int(min, max)`
+- `torch.rand_norm(scale)`
+- `torch.relu(x)`
+- `torch.leaky_relu(x, alpha_ppm)`
+- `torch.sigmoid(x)`
+- `torch.tanh(x)`
+- `torch.dot3(ax, ay, az, bx, by, bz)`
+- `torch.mse(pred, target)`
+- `torch.lerp(a, b, t_ppm)`
+- `torch.step(param, grad, lr_ppm)`
 
 ## Language Syntax
 
@@ -116,7 +145,7 @@ print(c.width, c.height)
 ```
 
 Import resolution:
-- `import a.b as m` -> loads `a/b.pypp` relative to current module directory
+- `import a.b as m` -> loads `a/b.pypp` relative to current library directory
 
 ### Object literals and field access
 
@@ -132,12 +161,12 @@ print(player.name, player.hp)
 
 Supported:
 - nested field access (`obj.a.b.c`)
-- object fields from imported modules (`m.player.hp`)
+- object fields from imported libraries (`m.player.hp`)
 
-## Modules
+## Libraries
 
-Current module model:
-- file-level globals become exported module fields
+Current import-library model:
+- file-level globals become exported library fields
 - `import mod as m` maps exports under one alias object
 
 Notes:
@@ -148,6 +177,7 @@ Notes:
 - [[Graphics]] for 2D and live loop
 - [[3D-Graphics]] for wireframe projection and cubes
 - [[Random-Noise]] for procedural utilities
+- [[AI-Library]] for torch-style helpers
 
 ## 3D Quick Reference
 

@@ -88,7 +88,7 @@ Use the GitHub **Wiki repo** and page links like `[[Home]]`, not file links to s
 - user-defined functions (`fn`)
 - class syntax (`class`)
 - object field assignment (`obj.hp = 90`)
-- richer module system (explicit exports)
+- richer library system (explicit exports)
 - filled 3D pipeline with depth buffer
 - audio/input abstraction layer
 

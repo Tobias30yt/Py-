@@ -13,6 +13,7 @@
 #include <string>
 #include <thread>
 #include <random>
+#include <limits>
 #include <memory>
 #include <map>
 #include <unordered_map>
@@ -25,6 +26,8 @@
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include <windows.h>
 #include <objidl.h>
 #include <gdiplus.h>
@@ -1672,6 +1675,37 @@ class VM {
       CuboidSolid(cx, cy, cz, size, size, size, r, g, b);
     }
 
+    void Pyramid(int cx, int cy, int cz, int size, int r, int g, int b) {
+      RequireGfx("gx3d.pyramid");
+      if (size <= 0) {
+        return;
+      }
+      const double h = static_cast<double>(size) / 2.0;
+      std::array<Vec3, 5> verts = {
+          Vec3{-h, -h, -h}, Vec3{h, -h, -h}, Vec3{h, -h, h},
+          Vec3{-h, -h, h},  Vec3{0.0, h, 0.0},
+      };
+      for (Vec3& v : verts) {
+        v = ApplyTransform(v);
+        v.x += static_cast<double>(cx);
+        v.y += static_cast<double>(cy);
+        v.z += static_cast<double>(cz);
+      }
+
+      static const std::array<std::pair<int, int>, 8> edges = {
+          std::pair<int, int>{0, 1}, {1, 2}, {2, 3}, {3, 0},
+          {0, 4},                    {1, 4}, {2, 4}, {3, 4},
+      };
+      for (const auto& [a, c] : edges) {
+        auto p1 = Project(verts[static_cast<std::size_t>(a)]);
+        auto p2 = Project(verts[static_cast<std::size_t>(c)]);
+        if (p1.has_value() && p2.has_value()) {
+          gfx_.Line(p1->first, p1->second, p2->first, p2->second, ClampColor(r),
+                    ClampColor(g), ClampColor(b));
+        }
+      }
+    }
+
     void CuboidSolid(int cx, int cy, int cz, int sx, int sy, int sz, int r,
                      int g, int b) {
       RequireGfx("gx3d.cuboid_solid");
@@ -1734,6 +1768,59 @@ class VM {
 
         FillTriangleDepth(*sv0, *sv1, *sv2, sr, sg, sb);
         FillTriangleDepth(*sv0, *sv2, *sv3, sr, sg, sb);
+      }
+    }
+
+    void PyramidSolid(int cx, int cy, int cz, int size, int r, int g, int b) {
+      RequireGfx("gx3d.pyramid_solid");
+      if (size <= 0) {
+        return;
+      }
+      EnsureDepthBuffer();
+
+      const double h = static_cast<double>(size) / 2.0;
+      std::array<Vec3, 5> verts = {
+          Vec3{-h, -h, -h}, Vec3{h, -h, -h}, Vec3{h, -h, h},
+          Vec3{-h, -h, h},  Vec3{0.0, h, 0.0},
+      };
+      for (Vec3& v : verts) {
+        v = ApplyTransform(v);
+        v.x += static_cast<double>(cx);
+        v.y += static_cast<double>(cy);
+        v.z += static_cast<double>(cz);
+      }
+
+      static const std::array<std::array<int, 3>, 6> faces = {{
+          {0, 1, 4},
+          {1, 2, 4},
+          {2, 3, 4},
+          {3, 0, 4},
+          {0, 1, 2},
+          {0, 2, 3},
+      }};
+
+      for (const auto& f : faces) {
+        auto sv0 = ProjectVertex(verts[static_cast<std::size_t>(f[0])]);
+        auto sv1 = ProjectVertex(verts[static_cast<std::size_t>(f[1])]);
+        auto sv2 = ProjectVertex(verts[static_cast<std::size_t>(f[2])]);
+        if (!sv0.has_value() || !sv1.has_value() || !sv2.has_value()) {
+          continue;
+        }
+        const int ax = sv1->x - sv0->x;
+        const int ay = sv1->y - sv0->y;
+        const int bx = sv2->x - sv0->x;
+        const int by = sv2->y - sv0->y;
+        const int cross = ax * by - ay * bx;
+        if (cross >= 0) {
+          continue;
+        }
+        int shade = 255 - static_cast<int>((sv0->z + sv1->z + sv2->z) / 3.0 / 45.0);
+        if (shade < 55) shade = 55;
+        if (shade > 255) shade = 255;
+        const int sr = (ClampColor(r) * shade) / 255;
+        const int sg = (ClampColor(g) * shade) / 255;
+        const int sb = (ClampColor(b) * shade) / 255;
+        FillTriangleDepth(*sv0, *sv1, *sv2, sr, sg, sb);
       }
     }
 
@@ -2058,6 +2145,205 @@ class VM {
     }
   };
 
+  class NetState {
+   public:
+    void Host(int port) {
+#ifdef _WIN32
+      EnsureWinsock();
+      OpenSocket();
+      sockaddr_in addr{};
+      addr.sin_family = AF_INET;
+      addr.sin_addr.s_addr = htonl(INADDR_ANY);
+      addr.sin_port = htons(static_cast<u_short>(port));
+      if (bind(sock_, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) !=
+          0) {
+        throw std::runtime_error("net.host bind failed");
+      }
+      is_host_ = true;
+      open_ = true;
+      has_remote_ = false;
+      has_state_ = false;
+#else
+      (void)port;
+      throw std::runtime_error("net.host is currently supported on Windows only");
+#endif
+    }
+
+    void Join(const std::string& host, int port) {
+#ifdef _WIN32
+      EnsureWinsock();
+      OpenSocket();
+      sockaddr_in addr{};
+      addr.sin_family = AF_INET;
+      addr.sin_port = htons(static_cast<u_short>(port));
+      int pton_res =
+          inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
+      if (pton_res != 1) {
+        throw std::runtime_error("net.join invalid IPv4 address: " + host);
+      }
+      remote_addr_ = addr;
+      has_remote_ = true;
+      is_host_ = false;
+      open_ = true;
+      has_state_ = false;
+#else
+      (void)host;
+      (void)port;
+      throw std::runtime_error("net.join is currently supported on Windows only");
+#endif
+    }
+
+    int Poll() {
+#ifdef _WIN32
+      if (!open_ || sock_ == INVALID_SOCKET) {
+        return 0;
+      }
+      int count = 0;
+      char buf[256];
+      while (true) {
+        sockaddr_in from{};
+        int from_len = sizeof(from);
+        int rc = recvfrom(sock_, buf, static_cast<int>(sizeof(buf) - 1), 0,
+                          reinterpret_cast<sockaddr*>(&from), &from_len);
+        if (rc < 0) {
+          int err = WSAGetLastError();
+          if (err == WSAEWOULDBLOCK) {
+            break;
+          }
+          throw std::runtime_error("net.poll recvfrom failed");
+        }
+        if (rc == 0) {
+          break;
+        }
+        buf[rc] = '\0';
+        ParsePacket(std::string(buf));
+        if (is_host_ && !has_remote_) {
+          remote_addr_ = from;
+          has_remote_ = true;
+        }
+        count += 1;
+      }
+      return count;
+#else
+      return 0;
+#endif
+    }
+
+    int SendPose(int x, int y, int z, int yaw, int pitch) {
+#ifdef _WIN32
+      if (!open_ || sock_ == INVALID_SOCKET || !has_remote_) {
+        return 0;
+      }
+      std::ostringstream out;
+      out << "PYPPMP1 " << x << " " << y << " " << z << " " << yaw << " "
+          << pitch;
+      const std::string payload = out.str();
+      int rc = sendto(sock_, payload.c_str(), static_cast<int>(payload.size()), 0,
+                      reinterpret_cast<const sockaddr*>(&remote_addr_),
+                      sizeof(remote_addr_));
+      if (rc < 0) {
+        return 0;
+      }
+      return 1;
+#else
+      (void)x;
+      (void)y;
+      (void)z;
+      (void)yaw;
+      (void)pitch;
+      return 0;
+#endif
+    }
+
+    int IsOpen() const { return open_ ? 1 : 0; }
+    int HasRemote() const { return has_remote_ ? 1 : 0; }
+    int HasState() const { return has_state_ ? 1 : 0; }
+    int RemoteX() const { return remote_x_; }
+    int RemoteY() const { return remote_y_; }
+    int RemoteZ() const { return remote_z_; }
+    int RemoteYaw() const { return remote_yaw_; }
+    int RemotePitch() const { return remote_pitch_; }
+
+    void Close() {
+#ifdef _WIN32
+      if (sock_ != INVALID_SOCKET) {
+        closesocket(sock_);
+        sock_ = INVALID_SOCKET;
+      }
+#endif
+      open_ = false;
+      has_remote_ = false;
+      has_state_ = false;
+    }
+
+    ~NetState() { Close(); }
+
+   private:
+#ifdef _WIN32
+    void EnsureWinsock() {
+      if (winsock_ready_) {
+        return;
+      }
+      WSADATA wsa{};
+      int rc = WSAStartup(MAKEWORD(2, 2), &wsa);
+      if (rc != 0) {
+        throw std::runtime_error("Failed to initialize Winsock");
+      }
+      winsock_ready_ = true;
+    }
+
+    void OpenSocket() {
+      Close();
+      sock_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+      if (sock_ == INVALID_SOCKET) {
+        throw std::runtime_error("net socket creation failed");
+      }
+      u_long non_blocking = 1;
+      if (ioctlsocket(sock_, FIONBIO, &non_blocking) != 0) {
+        closesocket(sock_);
+        sock_ = INVALID_SOCKET;
+        throw std::runtime_error("net socket non-blocking setup failed");
+      }
+      open_ = true;
+    }
+#endif
+
+    void ParsePacket(const std::string& packet) {
+      std::istringstream in(packet);
+      std::string magic;
+      int x = 0;
+      int y = 0;
+      int z = 0;
+      int yaw = 0;
+      int pitch = 0;
+      in >> magic >> x >> y >> z >> yaw >> pitch;
+      if (!in || magic != "PYPPMP1") {
+        return;
+      }
+      remote_x_ = x;
+      remote_y_ = y;
+      remote_z_ = z;
+      remote_yaw_ = yaw;
+      remote_pitch_ = pitch;
+      has_state_ = true;
+    }
+
+    bool open_ = false;
+    bool is_host_ = false;
+    bool has_remote_ = false;
+    bool has_state_ = false;
+    int remote_x_ = 0;
+    int remote_y_ = 0;
+    int remote_z_ = 0;
+    int remote_yaw_ = 0;
+    int remote_pitch_ = 0;
+#ifdef _WIN32
+    bool winsock_ready_ = false;
+    SOCKET sock_ = INVALID_SOCKET;
+    sockaddr_in remote_addr_{};
+#endif
+  };
+
   Value Pop() {
     if (stack_.empty()) {
       throw std::runtime_error("Stack underflow");
@@ -2124,6 +2410,109 @@ class VM {
       }
       std::cout << "\n";
       stack_.push_back(0);
+      return;
+    }
+    if (name == "torch.seed") {
+      ExpectArgc(name, argc, 1);
+      torch_seed_ = static_cast<std::uint32_t>(ValueAsInt(args[0], name));
+      torch_rng_.seed(torch_seed_);
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "torch.rand_int") {
+      ExpectArgc(name, argc, 2);
+      int lo = ValueAsInt(args[0], name);
+      int hi = ValueAsInt(args[1], name);
+      if (lo > hi) {
+        std::swap(lo, hi);
+      }
+      std::uniform_int_distribution<int> dist(lo, hi);
+      stack_.push_back(dist(torch_rng_));
+      return;
+    }
+    if (name == "torch.rand_norm") {
+      ExpectArgc(name, argc, 1);
+      const int scale = ValueAsInt(args[0], name);
+      std::normal_distribution<double> dist(0.0, 1.0);
+      stack_.push_back(static_cast<int>(std::round(dist(torch_rng_) *
+                                                   static_cast<double>(scale))));
+      return;
+    }
+    if (name == "torch.relu") {
+      ExpectArgc(name, argc, 1);
+      int x = ValueAsInt(args[0], name);
+      stack_.push_back(x > 0 ? x : 0);
+      return;
+    }
+    if (name == "torch.leaky_relu") {
+      ExpectArgc(name, argc, 2);
+      int x = ValueAsInt(args[0], name);
+      int alpha_ppm = ValueAsInt(args[1], name);
+      if (x >= 0) {
+        stack_.push_back(x);
+      } else {
+        stack_.push_back(static_cast<int>((static_cast<long long>(x) *
+                                           static_cast<long long>(alpha_ppm)) /
+                                          1000000LL));
+      }
+      return;
+    }
+    if (name == "torch.sigmoid") {
+      ExpectArgc(name, argc, 1);
+      stack_.push_back(TorchSigmoidPpm(ValueAsInt(args[0], name)));
+      return;
+    }
+    if (name == "torch.tanh") {
+      ExpectArgc(name, argc, 1);
+      stack_.push_back(TorchTanhPpm(ValueAsInt(args[0], name)));
+      return;
+    }
+    if (name == "torch.dot3") {
+      ExpectArgc(name, argc, 6);
+      long long v =
+          static_cast<long long>(ValueAsInt(args[0], name)) *
+              static_cast<long long>(ValueAsInt(args[3], name)) +
+          static_cast<long long>(ValueAsInt(args[1], name)) *
+              static_cast<long long>(ValueAsInt(args[4], name)) +
+          static_cast<long long>(ValueAsInt(args[2], name)) *
+              static_cast<long long>(ValueAsInt(args[5], name));
+      stack_.push_back(static_cast<int>(v));
+      return;
+    }
+    if (name == "torch.mse") {
+      ExpectArgc(name, argc, 2);
+      long long d = static_cast<long long>(ValueAsInt(args[0], name)) -
+                    static_cast<long long>(ValueAsInt(args[1], name));
+      long long v = d * d;
+      if (v > static_cast<long long>(std::numeric_limits<int>::max())) {
+        v = static_cast<long long>(std::numeric_limits<int>::max());
+      }
+      stack_.push_back(static_cast<int>(v));
+      return;
+    }
+    if (name == "torch.lerp") {
+      ExpectArgc(name, argc, 3);
+      int a = ValueAsInt(args[0], name);
+      int b = ValueAsInt(args[1], name);
+      int t_ppm = ValueAsInt(args[2], name);
+      if (t_ppm < 0) t_ppm = 0;
+      if (t_ppm > 1000000) t_ppm = 1000000;
+      long long out =
+          static_cast<long long>(a) +
+          (static_cast<long long>(b - a) * static_cast<long long>(t_ppm)) /
+              1000000LL;
+      stack_.push_back(static_cast<int>(out));
+      return;
+    }
+    if (name == "torch.step") {
+      ExpectArgc(name, argc, 3);
+      int param = ValueAsInt(args[0], name);
+      int grad = ValueAsInt(args[1], name);
+      int lr_ppm = ValueAsInt(args[2], name);
+      long long delta =
+          (static_cast<long long>(grad) * static_cast<long long>(lr_ppm)) /
+          1000000LL;
+      stack_.push_back(static_cast<int>(static_cast<long long>(param) - delta));
       return;
     }
     if (name == "random.seed") {
@@ -2227,6 +2616,80 @@ class VM {
       }
       stack_.push_back(
           NoiseFractal2(x, y, scale, octaves, persistence_pct));
+      return;
+    }
+    if (name == "net.host") {
+      ExpectArgc(name, argc, 1);
+      net_.Host(ValueAsInt(args[0], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "net.join") {
+      ExpectArgc(name, argc, 2);
+      if (!std::holds_alternative<std::string>(args[0])) {
+        throw std::runtime_error("net.join expects IPv4 string and port");
+      }
+      net_.Join(std::get<std::string>(args[0]), ValueAsInt(args[1], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "net.poll") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(net_.Poll());
+      return;
+    }
+    if (name == "net.send_pose") {
+      ExpectArgc(name, argc, 5);
+      stack_.push_back(
+          net_.SendPose(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                        ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+                        ValueAsInt(args[4], name)));
+      return;
+    }
+    if (name == "net.open") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(net_.IsOpen());
+      return;
+    }
+    if (name == "net.has_remote") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(net_.HasRemote());
+      return;
+    }
+    if (name == "net.has_state") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(net_.HasState());
+      return;
+    }
+    if (name == "net.remote_x") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(net_.RemoteX());
+      return;
+    }
+    if (name == "net.remote_y") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(net_.RemoteY());
+      return;
+    }
+    if (name == "net.remote_z") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(net_.RemoteZ());
+      return;
+    }
+    if (name == "net.remote_yaw") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(net_.RemoteYaw());
+      return;
+    }
+    if (name == "net.remote_pitch") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(net_.RemotePitch());
+      return;
+    }
+    if (name == "net.close") {
+      ExpectArgc(name, argc, 0);
+      net_.Close();
+      stack_.push_back(0);
       return;
     }
 
@@ -2540,6 +3003,24 @@ class VM {
       stack_.push_back(0);
       return;
     }
+    if (name == "gx3d.pyramid") {
+      ExpectArgc(name, argc, 7);
+      gx3d_.Pyramid(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                    ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+                    ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+                    ValueAsInt(args[6], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.pyramid_solid") {
+      ExpectArgc(name, argc, 7);
+      gx3d_.PyramidSolid(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                         ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+                         ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+                         ValueAsInt(args[6], name));
+      stack_.push_back(0);
+      return;
+    }
     if (name == "gx3d.cuboid") {
       ExpectArgc(name, argc, 9);
       gx3d_.Cuboid(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
@@ -2702,6 +3183,18 @@ class VM {
     return ClampByte(static_cast<int>(std::round(sum / norm)));
   }
 
+  static int TorchSigmoidPpm(int x) {
+    const double xf = static_cast<double>(x) / 1000.0;
+    const double s = 1.0 / (1.0 + std::exp(-xf));
+    return static_cast<int>(std::round(s * 1000000.0));
+  }
+
+  static int TorchTanhPpm(int x) {
+    const double xf = static_cast<double>(x) / 1000.0;
+    const double t = std::tanh(xf);
+    return static_cast<int>(std::round(t * 1000000.0));
+  }
+
   static void ExpectArgc(const std::string& name, int argc, int expected) {
     if (argc != expected) {
       throw std::runtime_error(name + " expects " + std::to_string(expected) +
@@ -2713,10 +3206,13 @@ class VM {
   std::unordered_map<std::string, Value> vars_;
   GraphicsState gfx_;
   Gx3dState gx3d_{gfx_};
+  NetState net_;
   std::filesystem::path module_base_;
   std::uint32_t random_seed_ = 1337U;
   std::mt19937 rng_{random_seed_};
   std::uint32_t noise_seed_ = 12345U;
+  std::uint32_t torch_seed_ = 4242U;
+  std::mt19937 torch_rng_{torch_seed_};
 };
 
 std::string ReadFile(const std::filesystem::path& file) {

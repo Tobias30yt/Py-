@@ -7,15 +7,16 @@ Current focus areas:
 - fast language experimentation (syntax + runtime)
 - real-time 2D graphics (`gfx`)
 - basic 3D wireframe rendering (`gx3d`)
-- module import aliases and object literals
+- library import aliases and object literals
 - standalone Windows executable packaging
 
 ## Wiki Navigation
 
-- [[Documentation]]: language syntax, compiler CLI, modules, objects, executable packaging
+- [[Documentation]]: language syntax, compiler CLI, libraries, objects, executable packaging
 - [[Graphics]]: full 2D graphics API and live game loop patterns
 - [[3D-Graphics]]: `gx3d` camera, projection, rotation, cube rendering
 - [[Random-Noise]]: standard random + procedural noise utilities
+- [[AI-Library]]: torch-style AI helpers (fixed-point/int)
 - [[Extras]]: keycodes, release workflow, troubleshooting, roadmap
 
 ## Version Scope
@@ -58,4 +59,5 @@ cmake --build build --config Release
 2. [[Graphics]]
 3. [[3D-Graphics]]
 4. [[Random-Noise]]
-5. [[Extras]]
+5. [[AI-Library]]
+6. [[Extras]]

@@ -17,7 +17,7 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - object literals + field access:
     - `let p = { name: "Rhea", hp: 100 }`
     - `print(p.name, p.hp)`
-- Built-in Utility-Module:
+- Built-in Utility-Library:
   - `random.seed(seed)`
   - `random.randint(min, max)` (inklusive Grenzen)
   - `random.randrange(start, stop)` (stop exklusiv)
@@ -27,7 +27,30 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `noise.value2(x, y)`, `noise.value3(x, y, z)` (`0..255`)
   - `noise.smooth2(x, y, scale)` (`0..255`)
   - `noise.fractal2(x, y, scale, octaves, persistence_pct)` (`0..255`)
-- Built-in Graphics-Modul:
+- Built-in Multiplayer-Netzwerk (`net`, UDP, Windows):
+  - `net.host(port)`
+  - `net.join("127.0.0.1", port)`
+  - `net.poll()`
+  - `net.send_pose(x, y, z, yaw, pitch)`
+  - `net.open()`
+  - `net.has_remote()`
+  - `net.has_state()`
+  - `net.remote_x()`, `net.remote_y()`, `net.remote_z()`
+  - `net.remote_yaw()`, `net.remote_pitch()`
+  - `net.close()`
+- Built-in KI-Library (`torch`, fixed-point/int friendly):
+  - `torch.seed(seed)`
+  - `torch.rand_int(min, max)`
+  - `torch.rand_norm(scale)`
+  - `torch.relu(x)`
+  - `torch.leaky_relu(x, alpha_ppm)`
+  - `torch.sigmoid(x)` (`0..1000000`)
+  - `torch.tanh(x)` (`-1000000..1000000`)
+  - `torch.dot3(ax, ay, az, bx, by, bz)`
+  - `torch.mse(pred, target)`
+  - `torch.lerp(a, b, t_ppm)`
+  - `torch.step(param, grad, lr_ppm)`
+- Built-in Graphics-Library:
   - `gfx.open(w, h)`
   - `gfx.window(w, h, "title")` (live window)
   - `gfx.window_ratio(w, h, ratio_w, ratio_h, "title")`
@@ -54,7 +77,7 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gfx.save("build/frame.ppm")`
   - `gfx.save_frame("build/pong", frame)`
   - `time.sleep_ms(ms)`
-- Built-in 3D-Modul (`gx3d`, wireframe):
+- Built-in 3D-Library (`gx3d`, wireframe + solids):
   - `gx3d.reset()`
   - `gx3d.camera(x, y, z)`
   - `gx3d.camera_move(dx, dy, dz)`
@@ -67,6 +90,8 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gx3d.line(x1, y1, z1, x2, y2, z2, r, g, b)`
   - `gx3d.cube(x, y, z, size, r, g, b)`
   - `gx3d.cube_solid(x, y, z, size, r, g, b)`
+  - `gx3d.pyramid(x, y, z, size, r, g, b)`
+  - `gx3d.pyramid_solid(x, y, z, size, r, g, b)`
   - `gx3d.cuboid(x, y, z, sx, sy, sz, r, g, b)`
   - `gx3d.cuboid_solid(x, y, z, sx, sy, sz, r, g, b)`
   - `gx3d.cube_sprite(x, y, z, size, sprite_id)`
@@ -117,7 +142,9 @@ Hinweis:
 .\build\pypp.exe run examples\menu_demo.pypp
 .\build\pypp.exe run examples\gx3d_frame.pypp
 .\build\pypp.exe run examples\gx3d_live.pypp
+.\build\pypp.exe run examples\multiplayer_test.pypp
 .\build\pypp.exe run examples\random_noise.pypp
+.\build\pypp.exe run examples\torch_demo.pypp
 .\build\pypp.exe run examples\import_objects_demo.pypp
 .\build\pypp.exe run projects\mini_minecraft\main.pypp
 ```

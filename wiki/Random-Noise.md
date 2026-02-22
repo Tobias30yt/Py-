@@ -59,5 +59,5 @@ end
 ```
 
 Back: [[Documentation]]  
-Next: [[Extras]]  
+Next: [[AI-Library]]  
 Home: [[Home]]

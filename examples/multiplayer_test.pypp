@@ -1,0 +1,90 @@
+# Set to 1 on host machine, 0 on client machine.
+let is_host = 1
+
+let port = 25000
+let host_ip = "127.0.0.1"
+
+gfx.window_ratio(1280, 720, 16, 9, "py++ Multiplayer Test")
+gfx.keep_aspect(1)
+gfx.mouse_lock(1)
+gfx.mouse_show(0)
+
+if is_host == 1:
+  net.host(port)
+end
+if is_host == 0:
+  net.join(host_ip, port)
+end
+
+gx3d.reset()
+gx3d.fov(430)
+gx3d.clip(4, 12000)
+gx3d.camera(0, 0, -760)
+
+let px = 0
+let py = 0
+let pz = 520
+let yaw = 0
+let pitch = 0
+
+while gfx.closed() == 0:
+  gfx.poll()
+
+  if gfx.key_down(27) == 1:
+    net.close()
+    gfx.mouse_lock(0)
+    gfx.mouse_show(1)
+    gfx.close()
+  end
+
+  let yaw = yaw + gfx.mouse_dx() / 2
+  let pitch = pitch + gfx.mouse_dy() / 3
+
+  if gfx.key_down(87) == 1:
+    let pz = pz + 8
+  end
+  if gfx.key_down(83) == 1:
+    let pz = pz - 8
+  end
+  if gfx.key_down(65) == 1:
+    let px = px - 8
+  end
+  if gfx.key_down(68) == 1:
+    let px = px + 8
+  end
+  if gfx.key_down(82) == 1:
+    let py = py + 8
+  end
+  if gfx.key_down(70) == 1:
+    let py = py - 8
+  end
+
+  net.send_pose(px, py, pz, yaw, pitch)
+  net.poll()
+
+  gfx.clear(8, 12, 20)
+  gx3d.rotate(pitch, yaw, 0)
+  gx3d.grid(2200, 80, -200)
+  gx3d.axis(180)
+
+  # Local player cube
+  if is_host == 1:
+    gx3d.cube_solid(px, py, pz, 120, 100, 220, 130)
+  end
+  if is_host == 0:
+    gx3d.cube_solid(px, py, pz, 120, 120, 180, 255)
+  end
+
+  # Remote player cube
+  if net.has_state() == 1:
+    if is_host == 1:
+      gx3d.cube_solid(net.remote_x(), net.remote_y(), net.remote_z(), 120, 120, 180, 255)
+    end
+    if is_host == 0:
+      gx3d.cube_solid(net.remote_x(), net.remote_y(), net.remote_z(), 120, 100, 220, 130)
+    end
+  end
+
+  gfx.present()
+  time.sleep_ms(16)
+end

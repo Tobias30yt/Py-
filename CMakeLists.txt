@@ -7,7 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_executable(pypp src/main.cpp)
 if(WIN32)
-  target_link_libraries(pypp PRIVATE gdiplus)
+  target_link_libraries(pypp PRIVATE gdiplus Ws2_32)
 endif()
 
 include(CTest)
