@@ -94,7 +94,7 @@ Prints runtime/compiler version.
 - `math.add/sub/mul/div(a, b)`
 - `math.clip(a, lo, hi)`, `math.abs(x_or_list)`
 
-### `net` multiplayer utilities (UDP, Windows)
+### `net` multiplayer utilities (UDP, Windows/Linux)
 
 - `net.host(port)`
 - `net.join("127.0.0.1", port)`

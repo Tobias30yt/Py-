@@ -27,7 +27,7 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `noise.value2(x, y)`, `noise.value3(x, y, z)` (`0..255`)
   - `noise.smooth2(x, y, scale)` (`0..255`)
   - `noise.fractal2(x, y, scale, octaves, persistence_pct)` (`0..255`)
-- Built-in Multiplayer-Netzwerk (`net`, UDP, Windows):
+- Built-in Multiplayer-Netzwerk (`net`, UDP, Windows/Linux):
   - `net.host(port)`
   - `net.join("127.0.0.1", port)`
   - `net.poll()`
@@ -117,6 +117,13 @@ cmake -S . -B build
 cmake --build build
 ```
 
+Linux build:
+
+```bash
+cmake -S . -B build
+cmake --build build -j
+```
+
 ## C++ Toolchain installieren (Windows)
 
 Wenn `cmake` oder ein Compiler fehlen, nutze das Setup-Tool:
@@ -137,6 +144,8 @@ Hinweis:
   oder nutze direkt `C:\Program Files\CMake\bin\cmake.exe`.
 - Wenn BuildTools per winget fehlschlagen, versucht das Tool automatisch eine Reparatur
   der vorhandenen Visual-Studio-Installation mit dem C++-Workload.
+- Live window rendering (`gfx.window`, input polling) is currently Windows-only.
+  Offscreen rendering, VM, math/numpy, noise/random, torch, and UDP networking run on Linux too.
 
 ## Nutzung
 

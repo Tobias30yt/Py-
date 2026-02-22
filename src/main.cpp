@@ -22,6 +22,7 @@
 #include <vector>
 #include <cstdlib>
 #include <chrono>
+#include <cerrno>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -31,6 +32,12 @@
 #include <windows.h>
 #include <objidl.h>
 #include <gdiplus.h>
+#else
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
 #endif
 
 namespace pypp {
@@ -2174,13 +2181,17 @@ class VM {
   class NetState {
    public:
     void Host(int port) {
-#ifdef _WIN32
       EnsureWinsock();
       OpenSocket();
       sockaddr_in addr{};
       addr.sin_family = AF_INET;
+#ifdef _WIN32
       addr.sin_addr.s_addr = htonl(INADDR_ANY);
       addr.sin_port = htons(static_cast<u_short>(port));
+#else
+      addr.sin_addr.s_addr = htonl(INADDR_ANY);
+      addr.sin_port = htons(static_cast<uint16_t>(port));
+#endif
       if (bind(sock_, reinterpret_cast<const sockaddr*>(&addr), sizeof(addr)) !=
           0) {
         throw std::runtime_error("net.host bind failed");
@@ -2189,19 +2200,18 @@ class VM {
       open_ = true;
       has_remote_ = false;
       has_state_ = false;
-#else
-      (void)port;
-      throw std::runtime_error("net.host is currently supported on Windows only");
-#endif
     }
 
     void Join(const std::string& host, int port) {
-#ifdef _WIN32
       EnsureWinsock();
       OpenSocket();
       sockaddr_in addr{};
       addr.sin_family = AF_INET;
+#ifdef _WIN32
       addr.sin_port = htons(static_cast<u_short>(port));
+#else
+      addr.sin_port = htons(static_cast<uint16_t>(port));
+#endif
       int pton_res =
           inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
       if (pton_res != 1) {
@@ -2212,30 +2222,31 @@ class VM {
       is_host_ = false;
       open_ = true;
       has_state_ = false;
-#else
-      (void)host;
-      (void)port;
-      throw std::runtime_error("net.join is currently supported on Windows only");
-#endif
     }
 
     int Poll() {
-#ifdef _WIN32
-      if (!open_ || sock_ == INVALID_SOCKET) {
+      if (!open_ || !SocketValid(sock_)) {
         return 0;
       }
       int count = 0;
       char buf[256];
       while (true) {
         sockaddr_in from{};
-        int from_len = sizeof(from);
+        SocketLen from_len = static_cast<SocketLen>(sizeof(from));
         int rc = recvfrom(sock_, buf, static_cast<int>(sizeof(buf) - 1), 0,
                           reinterpret_cast<sockaddr*>(&from), &from_len);
         if (rc < 0) {
+#ifdef _WIN32
           int err = WSAGetLastError();
           if (err == WSAEWOULDBLOCK) {
             break;
           }
+#else
+          int err = errno;
+          if (err == EWOULDBLOCK || err == EAGAIN) {
+            break;
+          }
+#endif
           throw std::runtime_error("net.poll recvfrom failed");
         }
         if (rc == 0) {
@@ -2250,14 +2261,10 @@ class VM {
         count += 1;
       }
       return count;
-#else
-      return 0;
-#endif
     }
 
     int SendPose(int x, int y, int z, int yaw, int pitch) {
-#ifdef _WIN32
-      if (!open_ || sock_ == INVALID_SOCKET || !has_remote_) {
+      if (!open_ || !SocketValid(sock_) || !has_remote_) {
         return 0;
       }
       std::ostringstream out;
@@ -2271,14 +2278,6 @@ class VM {
         return 0;
       }
       return 1;
-#else
-      (void)x;
-      (void)y;
-      (void)z;
-      (void)yaw;
-      (void)pitch;
-      return 0;
-#endif
     }
 
     int IsOpen() const { return open_ ? 1 : 0; }
@@ -2291,12 +2290,7 @@ class VM {
     int RemotePitch() const { return remote_pitch_; }
 
     void Close() {
-#ifdef _WIN32
-      if (sock_ != INVALID_SOCKET) {
-        closesocket(sock_);
-        sock_ = INVALID_SOCKET;
-      }
-#endif
+      CloseSocket();
       open_ = false;
       has_remote_ = false;
       has_state_ = false;
@@ -2305,6 +2299,24 @@ class VM {
     ~NetState() { Close(); }
 
    private:
+#ifdef _WIN32
+    using SocketHandle = SOCKET;
+    using SocketLen = int;
+    static constexpr SocketHandle kInvalidSocket = INVALID_SOCKET;
+#else
+    using SocketHandle = int;
+    using SocketLen = socklen_t;
+    static constexpr SocketHandle kInvalidSocket = -1;
+#endif
+
+    static bool SocketValid(SocketHandle sock) {
+#ifdef _WIN32
+      return sock != INVALID_SOCKET;
+#else
+      return sock >= 0;
+#endif
+    }
+
 #ifdef _WIN32
     void EnsureWinsock() {
       if (winsock_ready_) {
@@ -2317,22 +2329,45 @@ class VM {
       }
       winsock_ready_ = true;
     }
+#else
+    void EnsureWinsock() {}
+#endif
 
     void OpenSocket() {
       Close();
       sock_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-      if (sock_ == INVALID_SOCKET) {
+      if (!SocketValid(sock_)) {
         throw std::runtime_error("net socket creation failed");
       }
+#ifdef _WIN32
       u_long non_blocking = 1;
       if (ioctlsocket(sock_, FIONBIO, &non_blocking) != 0) {
         closesocket(sock_);
-        sock_ = INVALID_SOCKET;
+        sock_ = kInvalidSocket;
         throw std::runtime_error("net socket non-blocking setup failed");
       }
+#else
+      int flags = fcntl(sock_, F_GETFL, 0);
+      if (flags < 0 || fcntl(sock_, F_SETFL, flags | O_NONBLOCK) != 0) {
+        close(sock_);
+        sock_ = kInvalidSocket;
+        throw std::runtime_error("net socket non-blocking setup failed");
+      }
+#endif
       open_ = true;
     }
+
+    void CloseSocket() {
+      if (!SocketValid(sock_)) {
+        return;
+      }
+#ifdef _WIN32
+      closesocket(sock_);
+#else
+      close(sock_);
 #endif
+      sock_ = kInvalidSocket;
+    }
 
     void ParsePacket(const std::string& packet) {
       std::istringstream in(packet);
@@ -2363,11 +2398,11 @@ class VM {
     int remote_z_ = 0;
     int remote_yaw_ = 0;
     int remote_pitch_ = 0;
-#ifdef _WIN32
+#if defined(_WIN32)
     bool winsock_ready_ = false;
-    SOCKET sock_ = INVALID_SOCKET;
-    sockaddr_in remote_addr_{};
 #endif
+    SocketHandle sock_ = kInvalidSocket;
+    sockaddr_in remote_addr_{};
   };
 
   Value Pop() {
