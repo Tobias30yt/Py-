@@ -25,6 +25,9 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gfx.key_down(keycode)`
   - `gfx.closed()`
   - `gfx.close()`
+  - `gfx.load_sprite("assets/player.png")`
+  - `gfx.draw_sprite(id, x, y)`
+  - `gfx.draw_sprite_scaled(id, x, y, w, h)`
   - `gfx.clear(r, g, b)`
   - `gfx.pixel(x, y, r, g, b)`
   - `gfx.line(x1, y1, x2, y2, r, g, b)`
@@ -37,9 +40,18 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
 - Built-in 3D-Modul (`gx3d`, wireframe):
   - `gx3d.reset()`
   - `gx3d.camera(x, y, z)`
+  - `gx3d.camera_move(dx, dy, dz)`
   - `gx3d.fov(fov)`
+  - `gx3d.clip(near, far)`
   - `gx3d.rotate(rx, ry, rz)`
+  - `gx3d.rotate_add(drx, dry, drz)`
+  - `gx3d.translate(x, y, z)`
+  - `gx3d.point(x, y, z, r, g, b)`
+  - `gx3d.line(x1, y1, z1, x2, y2, z2, r, g, b)`
   - `gx3d.cube(x, y, z, size, r, g, b)`
+  - `gx3d.cuboid(x, y, z, sx, sy, sz, r, g, b)`
+  - `gx3d.axis(length)`
+  - `gx3d.grid(size, step, y)`
 
 ## Build
 
@@ -144,4 +156,23 @@ git push
 
 git tag v0.4.0
 git push origin v0.4.0
+```
+
+## VS Code Extension (Language Support)
+
+A VS Code extension scaffold is included at:
+
+- `extensions/pypp-vscode`
+
+It provides:
+- syntax highlighting for `.pypp`
+- comment/bracket config
+- snippets for `gfx`, `gx3d`, loops, imports
+
+Package locally (optional):
+
+```powershell
+cd extensions/pypp-vscode
+npm i -g @vscode/vsce
+vsce package
 ```

@@ -1,0 +1,68 @@
+{
+  "If Block": {
+    "prefix": "if",
+    "body": [
+      "if ${1:condition}:",
+      "  ${2:print(\"ok\")}",
+      "end"
+    ],
+    "description": "Insert if/end block"
+  },
+  "While Block": {
+    "prefix": "while",
+    "body": [
+      "while ${1:condition}:",
+      "  ${2:print(\"loop\")}",
+      "end"
+    ],
+    "description": "Insert while/end block"
+  },
+  "Import Alias": {
+    "prefix": "importas",
+    "body": [
+      "import ${1:module} as ${2:m}"
+    ],
+    "description": "Insert import ... as ..."
+  },
+  "Object Literal": {
+    "prefix": "obj",
+    "body": [
+      "let ${1:name} = {",
+      "  ${2:key}: ${3:value}",
+      "}"
+    ],
+    "description": "Insert object literal"
+  },
+  "GFX Window Loop": {
+    "prefix": "gfxloop",
+    "body": [
+      "gfx.window(${1:800}, ${2:480}, \"${3:pypp app}\")",
+      "",
+      "while gfx.closed() == 0:",
+      "  gfx.poll()",
+      "  if gfx.key_down(27) == 1:",
+      "    gfx.close()",
+      "  end",
+      "  gfx.clear(${4:12}, ${5:18}, ${6:26})",
+      "  ${7:gfx.present()}",
+      "  time.sleep_ms(16)",
+      "end"
+    ],
+    "description": "Insert live gfx loop"
+  },
+  "GX3D Scene": {
+    "prefix": "gx3d",
+    "body": [
+      "gx3d.reset()",
+      "gx3d.camera(0, 0, -320)",
+      "gx3d.fov(360)",
+      "gx3d.clip(4, 5000)",
+      "gx3d.rotate(${1:0}, ${2:0}, ${3:0})",
+      "gx3d.grid(500, 50, 120)",
+      "gx3d.axis(120)",
+      "gx3d.cube(0, 0, 120, 120, 255, 230, 140)"
+    ],
+    "description": "Insert gx3d setup and primitive calls"
+  }
+}
+

@@ -1,0 +1,27 @@
+{
+  "comments": {
+    "lineComment": "#"
+  },
+  "brackets": [
+    ["{", "}"],
+    ["(", ")"]
+  ],
+  "autoClosingPairs": [
+    ["{", "}"],
+    ["(", ")"],
+    ["\"", "\""]
+  ],
+  "surroundingPairs": [
+    ["{", "}"],
+    ["(", ")"],
+    ["\"", "\""]
+  ],
+  "folding": {
+    "offSide": true,
+    "markers": {
+      "start": "^\\s*(if|while)\\b.*:\\s*$",
+      "end": "^\\s*end\\s*$"
+    }
+  }
+}
+

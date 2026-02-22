@@ -13,6 +13,7 @@
 #include <string>
 #include <thread>
 #include <memory>
+#include <map>
 #include <unordered_map>
 #include <utility>
 #include <variant>
@@ -24,6 +25,8 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+#include <objidl.h>
+#include <gdiplus.h>
 #endif
 
 namespace pypp {
@@ -626,6 +629,18 @@ struct GraphicsState {
   int width = 0;
   int height = 0;
   std::vector<Pixel> pixels;
+  struct SpriteTexel {
+    std::uint8_t r = 0;
+    std::uint8_t g = 0;
+    std::uint8_t b = 0;
+    std::uint8_t a = 255;
+  };
+  struct SpriteAsset {
+    int width = 0;
+    int height = 0;
+    std::vector<SpriteTexel> texels;
+  };
+  std::vector<SpriteAsset> sprites;
 #ifdef _WIN32
   HWND hwnd = nullptr;
   bool window_open = false;
@@ -884,6 +899,67 @@ struct GraphicsState {
 #endif
   }
 
+  int LoadSprite(const std::string& path) {
+#ifdef _WIN32
+    (void)GetGdiPlusRuntime();
+    std::filesystem::path p(path);
+    std::wstring wp = p.wstring();
+    std::unique_ptr<Gdiplus::Bitmap> bmp(
+        Gdiplus::Bitmap::FromFile(wp.c_str(), FALSE));
+    if (!bmp || bmp->GetLastStatus() != Gdiplus::Ok) {
+      throw std::runtime_error("gfx.load_sprite failed for: " + path);
+    }
+    const int w = static_cast<int>(bmp->GetWidth());
+    const int h = static_cast<int>(bmp->GetHeight());
+    if (w <= 0 || h <= 0) {
+      throw std::runtime_error("gfx.load_sprite invalid image size: " + path);
+    }
+
+    SpriteAsset sprite;
+    sprite.width = w;
+    sprite.height = h;
+    sprite.texels.resize(static_cast<std::size_t>(w * h));
+
+    for (int y = 0; y < h; ++y) {
+      for (int x = 0; x < w; ++x) {
+        Gdiplus::Color c;
+        if (bmp->GetPixel(static_cast<INT>(x), static_cast<INT>(y), &c) !=
+            Gdiplus::Ok) {
+          throw std::runtime_error("gfx.load_sprite pixel read failed: " + path);
+        }
+        SpriteTexel t;
+        t.r = c.GetR();
+        t.g = c.GetG();
+        t.b = c.GetB();
+        t.a = c.GetA();
+        sprite.texels[static_cast<std::size_t>(y * w + x)] = t;
+      }
+    }
+
+    sprites.push_back(std::move(sprite));
+    return static_cast<int>(sprites.size() - 1);
+#else
+    (void)path;
+    throw std::runtime_error(
+        "gfx.load_sprite is currently implemented for Windows builds only");
+#endif
+  }
+
+  void DrawSprite(int sprite_id, int x, int y) {
+    EnsureOpen("gfx.draw_sprite");
+    const SpriteAsset& s = GetSprite(sprite_id, "gfx.draw_sprite");
+    BlitSprite(s, x, y, s.width, s.height);
+  }
+
+  void DrawSpriteScaled(int sprite_id, int x, int y, int w, int h) {
+    EnsureOpen("gfx.draw_sprite_scaled");
+    if (w <= 0 || h <= 0) {
+      return;
+    }
+    const SpriteAsset& s = GetSprite(sprite_id, "gfx.draw_sprite_scaled");
+    BlitSprite(s, x, y, w, h);
+  }
+
  private:
   void EnsureOpen(const std::string& fn) const {
     if (!IsOpen()) {
@@ -900,7 +976,66 @@ struct GraphicsState {
     pixels[static_cast<std::size_t>(y * width + x)] = pixel;
   }
 
+  const SpriteAsset& GetSprite(int sprite_id, const std::string& fn) const {
+    if (sprite_id < 0 || static_cast<std::size_t>(sprite_id) >= sprites.size()) {
+      throw std::runtime_error(fn + ": invalid sprite id " +
+                               std::to_string(sprite_id));
+    }
+    return sprites[static_cast<std::size_t>(sprite_id)];
+  }
+
+  void BlitSprite(const SpriteAsset& s, int dst_x, int dst_y, int dst_w,
+                  int dst_h) {
+    for (int yy = 0; yy < dst_h; ++yy) {
+      const int sy = (yy * s.height) / dst_h;
+      for (int xx = 0; xx < dst_w; ++xx) {
+        const int sx = (xx * s.width) / dst_w;
+        const SpriteTexel& t =
+            s.texels[static_cast<std::size_t>(sy * s.width + sx)];
+        if (t.a == 0) {
+          continue;
+        }
+        const int tx = dst_x + xx;
+        const int ty = dst_y + yy;
+        if (tx < 0 || ty < 0 || tx >= width || ty >= height) {
+          continue;
+        }
+        Pixel& out = pixels[static_cast<std::size_t>(ty * width + tx)];
+        if (t.a == 255) {
+          out = Pixel{static_cast<int>(t.r), static_cast<int>(t.g),
+                      static_cast<int>(t.b)};
+        } else {
+          const int a = static_cast<int>(t.a);
+          out.r = (static_cast<int>(t.r) * a + out.r * (255 - a)) / 255;
+          out.g = (static_cast<int>(t.g) * a + out.g * (255 - a)) / 255;
+          out.b = (static_cast<int>(t.b) * a + out.b * (255 - a)) / 255;
+        }
+      }
+    }
+  }
+
 #ifdef _WIN32
+  struct GdiPlusRuntime {
+    ULONG_PTR token = 0;
+    GdiPlusRuntime() {
+      Gdiplus::GdiplusStartupInput input;
+      Gdiplus::Status st = Gdiplus::GdiplusStartup(&token, &input, nullptr);
+      if (st != Gdiplus::Ok) {
+        throw std::runtime_error("Failed to initialize GDI+");
+      }
+    }
+    ~GdiPlusRuntime() {
+      if (token != 0) {
+        Gdiplus::GdiplusShutdown(token);
+      }
+    }
+  };
+
+  static GdiPlusRuntime& GetGdiPlusRuntime() {
+    static GdiPlusRuntime runtime;
+    return runtime;
+  }
+
   static LRESULT CALLBACK WndProcStatic(HWND hwnd, UINT msg, WPARAM wparam,
                                         LPARAM lparam) {
     GraphicsState* state = nullptr;
@@ -1049,13 +1184,37 @@ class VM {
     void Reset() {
       cam_ = Vec3{0.0, 0.0, -220.0};
       rot_deg_ = Vec3{0.0, 0.0, 0.0};
+      trans_ = Vec3{0.0, 0.0, 0.0};
       fov_ = 300.0;
+      near_clip_ = 1.0;
+      far_clip_ = 10000.0;
     }
 
-    void Camera(int x, int y, int z) { cam_ = Vec3{static_cast<double>(x), static_cast<double>(y), static_cast<double>(z)}; }
+    void Camera(int x, int y, int z) {
+      cam_ = Vec3{static_cast<double>(x), static_cast<double>(y),
+                  static_cast<double>(z)};
+    }
+
+    void CameraMove(int dx, int dy, int dz) {
+      cam_.x += static_cast<double>(dx);
+      cam_.y += static_cast<double>(dy);
+      cam_.z += static_cast<double>(dz);
+    }
 
     void Rotate(int x_deg, int y_deg, int z_deg) {
-      rot_deg_ = Vec3{static_cast<double>(x_deg), static_cast<double>(y_deg), static_cast<double>(z_deg)};
+      rot_deg_ = Vec3{static_cast<double>(x_deg), static_cast<double>(y_deg),
+                      static_cast<double>(z_deg)};
+    }
+
+    void RotateAdd(int dx_deg, int dy_deg, int dz_deg) {
+      rot_deg_.x += static_cast<double>(dx_deg);
+      rot_deg_.y += static_cast<double>(dy_deg);
+      rot_deg_.z += static_cast<double>(dz_deg);
+    }
+
+    void Translate(int x, int y, int z) {
+      trans_ = Vec3{static_cast<double>(x), static_cast<double>(y),
+                    static_cast<double>(z)};
     }
 
     void Fov(int fov) {
@@ -1065,10 +1224,42 @@ class VM {
       fov_ = static_cast<double>(fov);
     }
 
-    void Cube(int cx, int cy, int cz, int size, int r, int g, int b) {
-      if (!gfx_.IsOpen()) {
-        throw std::runtime_error("gx3d.cube requires gfx.open(...) or gfx.window(...) first");
+    void Clip(int near_z, int far_z) {
+      if (near_z <= 0 || far_z <= near_z) {
+        throw std::runtime_error("gx3d.clip expects near>0 and far>near");
       }
+      near_clip_ = static_cast<double>(near_z);
+      far_clip_ = static_cast<double>(far_z);
+    }
+
+    void Point(int x, int y, int z, int r, int g, int b) {
+      RequireGfx("gx3d.point");
+      auto p = Project(ApplyTransform(Vec3{static_cast<double>(x),
+                                           static_cast<double>(y),
+                                           static_cast<double>(z)}));
+      if (p.has_value()) {
+        gfx_.PixelAt(p->first, p->second, ClampColor(r), ClampColor(g),
+                     ClampColor(b));
+      }
+    }
+
+    void Line3d(int x1, int y1, int z1, int x2, int y2, int z2, int r, int g,
+                int b) {
+      RequireGfx("gx3d.line");
+      auto p1 = Project(ApplyTransform(Vec3{static_cast<double>(x1),
+                                            static_cast<double>(y1),
+                                            static_cast<double>(z1)}));
+      auto p2 = Project(ApplyTransform(Vec3{static_cast<double>(x2),
+                                            static_cast<double>(y2),
+                                            static_cast<double>(z2)}));
+      if (p1.has_value() && p2.has_value()) {
+        gfx_.Line(p1->first, p1->second, p2->first, p2->second, ClampColor(r),
+                  ClampColor(g), ClampColor(b));
+      }
+    }
+
+    void Cube(int cx, int cy, int cz, int size, int r, int g, int b) {
+      RequireGfx("gx3d.cube");
       if (size <= 0) {
         return;
       }
@@ -1080,7 +1271,7 @@ class VM {
       };
 
       for (Vec3& v : verts) {
-        v = RotateVec(v, rot_deg_);
+        v = ApplyTransform(v);
         v.x += static_cast<double>(cx);
         v.y += static_cast<double>(cy);
         v.z += static_cast<double>(cz);
@@ -1096,8 +1287,65 @@ class VM {
         auto p1 = Project(verts[static_cast<std::size_t>(a)]);
         auto p2 = Project(verts[static_cast<std::size_t>(c)]);
         if (p1.has_value() && p2.has_value()) {
-          gfx_.Line(p1->first, p1->second, p2->first, p2->second, r, g, b);
+          gfx_.Line(p1->first, p1->second, p2->first, p2->second, ClampColor(r),
+                    ClampColor(g), ClampColor(b));
         }
+      }
+    }
+
+    void Cuboid(int cx, int cy, int cz, int sx, int sy, int sz, int r, int g,
+                int b) {
+      RequireGfx("gx3d.cuboid");
+      if (sx <= 0 || sy <= 0 || sz <= 0) {
+        return;
+      }
+      const double hx = static_cast<double>(sx) / 2.0;
+      const double hy = static_cast<double>(sy) / 2.0;
+      const double hz = static_cast<double>(sz) / 2.0;
+      std::array<Vec3, 8> verts = {
+          Vec3{-hx, -hy, -hz}, Vec3{hx, -hy, -hz},  Vec3{hx, hy, -hz},
+          Vec3{-hx, hy, -hz},  Vec3{-hx, -hy, hz},  Vec3{hx, -hy, hz},
+          Vec3{hx, hy, hz},    Vec3{-hx, hy, hz},
+      };
+      for (Vec3& v : verts) {
+        v = ApplyTransform(v);
+        v.x += static_cast<double>(cx);
+        v.y += static_cast<double>(cy);
+        v.z += static_cast<double>(cz);
+      }
+      static const std::array<std::pair<int, int>, 12> edges = {
+          std::pair<int, int>{0, 1}, {1, 2}, {2, 3}, {3, 0},
+          {4, 5},                    {5, 6}, {6, 7}, {7, 4},
+          {0, 4},                    {1, 5}, {2, 6}, {3, 7},
+      };
+      for (const auto& [a, c] : edges) {
+        auto p1 = Project(verts[static_cast<std::size_t>(a)]);
+        auto p2 = Project(verts[static_cast<std::size_t>(c)]);
+        if (p1.has_value() && p2.has_value()) {
+          gfx_.Line(p1->first, p1->second, p2->first, p2->second, ClampColor(r),
+                    ClampColor(g), ClampColor(b));
+        }
+      }
+    }
+
+    void Axis(int len) {
+      RequireGfx("gx3d.axis");
+      if (len <= 0) {
+        return;
+      }
+      Line3d(0, 0, 0, len, 0, 0, 255, 90, 90);
+      Line3d(0, 0, 0, 0, len, 0, 90, 255, 90);
+      Line3d(0, 0, 0, 0, 0, len, 90, 140, 255);
+    }
+
+    void Grid(int size, int step, int y) {
+      RequireGfx("gx3d.grid");
+      if (size <= 0 || step <= 0) {
+        return;
+      }
+      for (int i = -size; i <= size; i += step) {
+        Line3d(i, y, -size, i, y, size, 70, 80, 95);
+        Line3d(-size, y, i, size, y, i, 70, 80, 95);
       }
     }
 
@@ -1134,11 +1382,19 @@ class VM {
       return v;
     }
 
+    Vec3 ApplyTransform(Vec3 v) const {
+      v = RotateVec(v, rot_deg_);
+      v.x += trans_.x;
+      v.y += trans_.y;
+      v.z += trans_.z;
+      return v;
+    }
+
     std::optional<std::pair<int, int>> Project(const Vec3& world) const {
       const double x = world.x - cam_.x;
       const double y = world.y - cam_.y;
       const double z = world.z - cam_.z;
-      if (z <= 1.0) {
+      if (z <= near_clip_ || z >= far_clip_) {
         return std::nullopt;
       }
 
@@ -1151,7 +1407,19 @@ class VM {
     GraphicsState& gfx_;
     Vec3 cam_{0.0, 0.0, -220.0};
     Vec3 rot_deg_{0.0, 0.0, 0.0};
+    Vec3 trans_{0.0, 0.0, 0.0};
     double fov_ = 300.0;
+    double near_clip_ = 1.0;
+    double far_clip_ = 10000.0;
+
+    static int ClampColor(int v) { return std::max(0, std::min(255, v)); }
+
+    void RequireGfx(const std::string& fn) const {
+      if (!gfx_.IsOpen()) {
+        throw std::runtime_error(fn +
+                                 " requires gfx.open(...) or gfx.window(...) first");
+      }
+    }
   };
 
   Value Pop() {
@@ -1343,6 +1611,30 @@ class VM {
       stack_.push_back(0);
       return;
     }
+    if (name == "gfx.load_sprite") {
+      ExpectArgc(name, argc, 1);
+      if (!std::holds_alternative<std::string>(args[0])) {
+        throw std::runtime_error("gfx.load_sprite expects path string");
+      }
+      int id = gfx_.LoadSprite(std::get<std::string>(args[0]));
+      stack_.push_back(id);
+      return;
+    }
+    if (name == "gfx.draw_sprite") {
+      ExpectArgc(name, argc, 3);
+      gfx_.DrawSprite(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                      ValueAsInt(args[2], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.draw_sprite_scaled") {
+      ExpectArgc(name, argc, 5);
+      gfx_.DrawSpriteScaled(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                            ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+                            ValueAsInt(args[4], name));
+      stack_.push_back(0);
+      return;
+    }
     if (name == "time.sleep_ms") {
       ExpectArgc(name, argc, 1);
       int ms = ValueAsInt(args[0], name);
@@ -1366,10 +1658,31 @@ class VM {
       stack_.push_back(0);
       return;
     }
+    if (name == "gx3d.camera_move") {
+      ExpectArgc(name, argc, 3);
+      gx3d_.CameraMove(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                       ValueAsInt(args[2], name));
+      stack_.push_back(0);
+      return;
+    }
     if (name == "gx3d.rotate") {
       ExpectArgc(name, argc, 3);
       gx3d_.Rotate(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
                    ValueAsInt(args[2], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.rotate_add") {
+      ExpectArgc(name, argc, 3);
+      gx3d_.RotateAdd(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                      ValueAsInt(args[2], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.translate") {
+      ExpectArgc(name, argc, 3);
+      gx3d_.Translate(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                      ValueAsInt(args[2], name));
       stack_.push_back(0);
       return;
     }
@@ -1379,12 +1692,59 @@ class VM {
       stack_.push_back(0);
       return;
     }
+    if (name == "gx3d.clip") {
+      ExpectArgc(name, argc, 2);
+      gx3d_.Clip(ValueAsInt(args[0], name), ValueAsInt(args[1], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.point") {
+      ExpectArgc(name, argc, 6);
+      gx3d_.Point(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                  ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+                  ValueAsInt(args[4], name), ValueAsInt(args[5], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.line") {
+      ExpectArgc(name, argc, 9);
+      gx3d_.Line3d(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                   ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+                   ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+                   ValueAsInt(args[6], name), ValueAsInt(args[7], name),
+                   ValueAsInt(args[8], name));
+      stack_.push_back(0);
+      return;
+    }
     if (name == "gx3d.cube") {
       ExpectArgc(name, argc, 7);
       gx3d_.Cube(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
                  ValueAsInt(args[2], name), ValueAsInt(args[3], name),
                  ValueAsInt(args[4], name), ValueAsInt(args[5], name),
                  ValueAsInt(args[6], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.cuboid") {
+      ExpectArgc(name, argc, 9);
+      gx3d_.Cuboid(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                   ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+                   ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+                   ValueAsInt(args[6], name), ValueAsInt(args[7], name),
+                   ValueAsInt(args[8], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.axis") {
+      ExpectArgc(name, argc, 1);
+      gx3d_.Axis(ValueAsInt(args[0], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.grid") {
+      ExpectArgc(name, argc, 3);
+      gx3d_.Grid(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                 ValueAsInt(args[2], name));
       stack_.push_back(0);
       return;
     }

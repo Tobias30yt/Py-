@@ -6,6 +6,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_executable(pypp src/main.cpp)
+if(WIN32)
+  target_link_libraries(pypp PRIVATE gdiplus)
+endif()
 
 include(CTest)
 if(BUILD_TESTING)

@@ -1,0 +1,42 @@
+{
+  "name": "pypp-language-support",
+  "displayName": "py++ Language Support",
+  "description": "Syntax highlighting and snippets for py++ (.pypp).",
+  "version": "0.4.0",
+  "publisher": "tobias30yt",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "pypp",
+        "aliases": [
+          "py++",
+          "pypp"
+        ],
+        "extensions": [
+          ".pypp"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "pypp",
+        "scopeName": "source.pypp",
+        "path": "./syntaxes/pypp.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "pypp",
+        "path": "./snippets/pypp.json"
+      }
+    ]
+  }
+}
+

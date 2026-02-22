@@ -1,0 +1,44 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "py++",
+  "scopeName": "source.pypp",
+  "patterns": [
+    {
+      "name": "comment.line.number-sign.pypp",
+      "match": "#.*$"
+    },
+    {
+      "name": "keyword.control.pypp",
+      "match": "\\b(import|as|let|if|while|end)\\b"
+    },
+    {
+      "name": "support.function.pypp",
+      "match": "\\b(gfx|gx3d|time)\\.[A-Za-z_][A-Za-z0-9_]*\\b"
+    },
+    {
+      "name": "support.function.pypp",
+      "match": "\\bprint\\b"
+    },
+    {
+      "name": "string.quoted.double.pypp",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.pypp",
+          "match": "\\\\."
+        }
+      ]
+    },
+    {
+      "name": "constant.numeric.pypp",
+      "match": "\\b\\d+\\b"
+    },
+    {
+      "name": "keyword.operator.pypp",
+      "match": "==|!=|<=|>=|=|\\+|-|\\*|/|<|>|\\.|:"
+    }
+  ],
+  "repository": {}
+}
+
