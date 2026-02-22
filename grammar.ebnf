@@ -1,5 +1,7 @@
 program       = { newline | comment } [ statement { separator statement } ] { newline | comment } ;
-statement     = let_stmt | if_stmt | while_stmt | expr_stmt ;
+statement     = import_stmt | let_stmt | if_stmt | while_stmt | expr_stmt ;
+import_stmt   = "import" module_name "as" ident ;
+module_name   = ident { "." ident } ;
 let_stmt      = "let" ident "=" expression ;
 if_stmt       = "if" expression ":" newline block "end" ;
 while_stmt    = "while" expression ":" newline block "end" ;
@@ -11,18 +13,39 @@ expression    = comparison ;
 comparison    = term { ("==" | "!=" | "<" | "<=" | ">" | ">=") term } ;
 term          = unary { ("*" | "/") unary } ;
 unary         = [ "-" ] primary ;
-primary       = int_lit | string_lit | variable | call | "(" expression ")" ;
+primary       = int_lit | string_lit | object_lit | variable | call | "(" expression ")" ;
 
-variable      = ident ;
+variable      = ident { "." ident } ;
 call          = callee "(" [ expression { "," expression } ] ")" ;
 callee        = ident { "." ident } ;
+object_lit    = "{" [ object_pair { "," object_pair } ] "}" ;
+object_pair   = (ident | string_lit) ":" expression ;
 
 # Built-ins (documented subset of valid calls)
 print_call    = "print" "(" [ expression { "," expression } ] ")" ;
 gfx_open      = "gfx.open" "(" expression "," expression ")" ;
 gfx_clear     = "gfx.clear" "(" expression "," expression "," expression ")" ;
 gfx_pixel     = "gfx.pixel" "(" expression "," expression "," expression "," expression "," expression ")" ;
+gfx_line      = "gfx.line" "(" expression "," expression "," expression "," expression "," expression "," expression "," expression ")" ;
+gfx_rect      = "gfx.rect" "(" expression "," expression "," expression "," expression "," expression "," expression "," expression ")" ;
+gfx_rect_o    = "gfx.rect_outline" "(" expression "," expression "," expression "," expression "," expression "," expression "," expression ")" ;
+gfx_circle    = "gfx.circle" "(" expression "," expression "," expression "," expression "," expression "," expression ")" ;
 gfx_save      = "gfx.save" "(" string_lit ")" ;
+gfx_save_fr   = "gfx.save_frame" "(" string_lit "," expression ")" ;
+gfx_width     = "gfx.width" "(" ")" ;
+gfx_height    = "gfx.height" "(" ")" ;
+gfx_window    = "gfx.window" "(" expression "," expression "," string_lit ")" ;
+gfx_poll      = "gfx.poll" "(" ")" ;
+gfx_present   = "gfx.present" "(" ")" ;
+gfx_key       = "gfx.key_down" "(" expression ")" ;
+gfx_closed    = "gfx.closed" "(" ")" ;
+gfx_close     = "gfx.close" "(" ")" ;
+time_sleep    = "time.sleep_ms" "(" expression ")" ;
+gx3d_reset    = "gx3d.reset" "(" ")" ;
+gx3d_camera   = "gx3d.camera" "(" expression "," expression "," expression ")" ;
+gx3d_rotate   = "gx3d.rotate" "(" expression "," expression "," expression ")" ;
+gx3d_fov      = "gx3d.fov" "(" expression ")" ;
+gx3d_cube     = "gx3d.cube" "(" expression "," expression "," expression "," expression "," expression "," expression "," expression ")" ;
 
 ident         = letter { letter | digit | "_" } ;
 int_lit       = digit { digit } ;

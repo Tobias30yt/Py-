@@ -1,0 +1,15 @@
+gfx.open(640, 360)
+gfx.clear(10, 14, 24)
+
+gx3d.reset()
+gx3d.camera(0, 0, -260)
+gx3d.fov(320)
+gx3d.rotate(24, 32, 0)
+
+gx3d.cube(0, 0, 120, 110, 255, 220, 120)
+gx3d.cube(-120, 0, 250, 80, 120, 200, 255)
+gx3d.cube(120, 0, 280, 80, 120, 255, 180)
+
+gfx.save("build/gx3d_frame.ppm")
+print("saved build/gx3d_frame.ppm")
+

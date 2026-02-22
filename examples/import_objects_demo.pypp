@@ -1,0 +1,5 @@
+import objects as o
+
+print("player:", o.player.name, o.player.hp, o.player.speed)
+print("world:", o.world.width, o.world.height)
+

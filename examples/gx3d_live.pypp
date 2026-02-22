@@ -1,0 +1,23 @@
+gfx.window(800, 480, "pypp gx3d live")
+gx3d.reset()
+gx3d.camera(0, 0, -320)
+gx3d.fov(360)
+
+let a = 0
+while gfx.closed() == 0:
+  gfx.poll()
+  if gfx.key_down(27) == 1:
+    gfx.close()
+  end
+
+  gfx.clear(8, 12, 20)
+  gx3d.rotate(a, a / 2, a / 3)
+  gx3d.cube(0, 0, 120, 120, 255, 230, 140)
+  gx3d.cube(-160, -30, 260, 70, 120, 200, 255)
+  gx3d.cube(170, 40, 300, 90, 120, 255, 180)
+  gfx.present()
+
+  let a = a + 2
+  time.sleep_ms(16)
+end
+

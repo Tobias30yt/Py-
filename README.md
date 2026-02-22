@@ -1,4 +1,4 @@
-# py++ (C++ edition)
+# py++ (C++ edition) - Update 0.4.0 (Graphics Update)
 
 `py++` ist jetzt komplett in C++ umgesetzt (kein Python-Compiler mehr im Projekt).
 Die Syntax bleibt python-aehnlich, aber bewusst minimal.
@@ -6,17 +6,40 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
 ## Features (aktueller Stand)
 
 - Kompilierung zu Bytecode (`.ppbc`)
+- Standalone Windows executables (`pypp compile-exe`)
 - Eigene VM zum Ausfuehren
 - Vereinfachte Syntax:
   - `let x = 123`
   - `print("hi", x + 1)`
   - `if cond: ... end`
   - `while cond: ... end`
+  - `import module.name as alias`
+  - object literals + field access:
+    - `let p = { name: "Rhea", hp: 100 }`
+    - `print(p.name, p.hp)`
 - Built-in Graphics-Modul:
   - `gfx.open(w, h)`
+  - `gfx.window(w, h, "title")` (live window)
+  - `gfx.poll()`
+  - `gfx.present()`
+  - `gfx.key_down(keycode)`
+  - `gfx.closed()`
+  - `gfx.close()`
   - `gfx.clear(r, g, b)`
   - `gfx.pixel(x, y, r, g, b)`
+  - `gfx.line(x1, y1, x2, y2, r, g, b)`
+  - `gfx.rect(x, y, w, h, r, g, b)`
+  - `gfx.rect_outline(x, y, w, h, r, g, b)`
+  - `gfx.circle(x, y, radius, r, g, b)`
   - `gfx.save("build/frame.ppm")`
+  - `gfx.save_frame("build/pong", frame)`
+  - `time.sleep_ms(ms)`
+- Built-in 3D-Modul (`gx3d`, wireframe):
+  - `gx3d.reset()`
+  - `gx3d.camera(x, y, z)`
+  - `gx3d.fov(fov)`
+  - `gx3d.rotate(rx, ry, rz)`
+  - `gx3d.cube(x, y, z, size, r, g, b)`
 
 ## Build
 
@@ -53,9 +76,28 @@ Hinweis:
 .\build\pypp.exe compile examples\hello.pypp
 .\build\pypp.exe build examples\hello.pypp
 .\build\pypp.exe run-bytecode build\hello.ppbc
+.\build\pypp.exe compile-exe examples\pong_live.pypp --out pong.exe
 .\build\pypp.exe run examples\control_flow.pypp
 .\build\pypp.exe run examples\graphics.pypp
+.\build\pypp.exe run examples\pong_game.pypp
+.\build\pypp.exe run examples\pong_live.pypp
+.\build\pypp.exe run examples\gx3d_frame.pypp
+.\build\pypp.exe run examples\gx3d_live.pypp
+.\build\pypp.exe run examples\import_objects_demo.pypp
 ```
+
+## Modules
+
+`import xyz as s` laedt `xyz.pypp` (oder `xyz/..`) und mappt exportierte Modul-Globals auf den Alias.
+
+Beispiel:
+
+```pypp
+import config as c
+print(c.width)
+```
+
+Hinweis: Klassen/Funktionen als eigene User-Definitionen sind fuer den naechsten Sprachschritt vorgesehen. `0.4.0` liefert das Alias-Import-Fundament.
 
 ## pypp global in PATH
 

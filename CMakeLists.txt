@@ -26,11 +26,23 @@ if(BUILD_TESTING)
     COMMAND pypp run ${CMAKE_SOURCE_DIR}/examples/fib.pypp
   )
   add_test(
+    NAME run_import_demo
+    COMMAND pypp run ${CMAKE_SOURCE_DIR}/examples/import_demo.pypp
+  )
+  add_test(
+    NAME run_import_objects_demo
+    COMMAND pypp run ${CMAKE_SOURCE_DIR}/examples/import_objects_demo.pypp
+  )
+  add_test(
     NAME run_control_flow
     COMMAND pypp run ${CMAKE_SOURCE_DIR}/examples/control_flow.pypp
   )
   add_test(
     NAME run_graphics
     COMMAND pypp run ${CMAKE_SOURCE_DIR}/examples/graphics.pypp
+  )
+  add_test(
+    NAME run_gx3d_frame
+    COMMAND pypp run ${CMAKE_SOURCE_DIR}/examples/gx3d_frame.pypp
   )
 endif()

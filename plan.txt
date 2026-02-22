@@ -16,6 +16,8 @@ Status-Legende:
 - [x] Ausdruecke: `+ - * /` und Klammern
 - [x] Funktionsaufrufe: `name(...)` und `modul.name(...)`
 - [x] Kontrollfluss (`if`, `while`, `end`)
+- [x] Import-Alias: `import modul as m`
+- [ ] User-definierte Funktionen/Klassen
 
 3) Compiler + VM
 - [x] Lexer in C++
@@ -29,7 +31,9 @@ Status-Legende:
 - [x] `gfx.clear(r, g, b)`
 - [x] `gfx.pixel(x, y, r, g, b)`
 - [x] `gfx.save("path.ppm")`
-- [ ] Erweiterte Grafikfunktionen (Linien, Rechtecke, Kreise)
+- [x] Erweiterte Grafikfunktionen (`line`, `rect`, `rect_outline`, `circle`, `save_frame`)
+- [x] Live-Grafikfenster + Input (`window`, `poll`, `present`, `key_down`, `closed`, `close`)
+- [x] Erste 3D-Schicht `gx3d` (Kamera, FOV, Rotation, Wireframe-Cube)
 
 5) Projektdateien
 - [x] `CMakeLists.txt`
@@ -44,4 +48,5 @@ Status-Legende:
 6) Naechste Schritte
 - [x] Bytecode-Datei wieder einlesen (`pypp run-bytecode`)
 - [x] `pypp` in User-PATH eintragbar (`pypp install-path`)
+- [x] Standalone `.exe` mit eingebettetem Bytecode (`pypp compile-exe`)
 - [ ] bessere Fehlermeldungen (Token-Kontext)

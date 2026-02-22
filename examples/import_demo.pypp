@@ -1,0 +1,3 @@
+import config as c
+print("config:", c.width, c.height, c.title)
+

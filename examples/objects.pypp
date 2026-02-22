@@ -1,0 +1,11 @@
+let player = {
+  name: "Rhea",
+  hp: 100,
+  speed: 7
+}
+
+let world = {
+  width: 640,
+  height: 360
+}
+
