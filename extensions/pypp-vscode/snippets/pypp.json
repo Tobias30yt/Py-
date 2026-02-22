@@ -63,6 +63,52 @@
       "gx3d.cube(0, 0, 120, 120, 255, 230, 140)"
     ],
     "description": "Insert gx3d setup and primitive calls"
+  },
+  "Net Host/Join Skeleton": {
+    "prefix": "netgame",
+    "body": [
+      "let is_host = ${1:1}",
+      "let port = ${2:25000}",
+      "let host_ip = \"${3:127.0.0.1}\"",
+      "",
+      "if is_host == 1:",
+      "  net.host(port)",
+      "end",
+      "if is_host == 0:",
+      "  net.join(host_ip, port)",
+      "end",
+      "",
+      "while gfx.closed() == 0:",
+      "  gfx.poll()",
+      "  net.poll()",
+      "  ${4:net.send_pose(0, 0, 0, 0, 0)}",
+      "  gfx.present()",
+      "  time.sleep_ms(16)",
+      "end"
+    ],
+    "description": "Insert basic net multiplayer loop"
+  },
+  "Math/Numpy Array Demo": {
+    "prefix": "matharr",
+    "body": [
+      "let a = math.array(1, 2, 3, 4, 5)",
+      "let b = numpy.arange(5)",
+      "print(\"sum\", math.sum(a))",
+      "print(\"mean\", math.mean(a))",
+      "print(\"dot\", math.dot(a, b))",
+      "print(\"a+10\", math.add(a, 10))"
+    ],
+    "description": "Insert math/numpy list operations"
+  },
+  "Torch Mini Demo": {
+    "prefix": "torchdemo",
+    "body": [
+      "torch.seed(${1:42})",
+      "let x = ${2:-1200}",
+      "print(\"relu\", torch.relu(x))",
+      "print(\"sigmoid\", torch.sigmoid(x))",
+      "print(\"dot3\", torch.dot3(2, 3, 4, 5, 6, 7))"
+    ],
+    "description": "Insert torch-style AI helper calls"
   }
 }
-

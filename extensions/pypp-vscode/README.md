@@ -6,14 +6,14 @@ Language extension for `py++` (`.pypp`) files.
 
 - Syntax highlighting for:
   - keywords (`let`, `if`, `while`, `import`, `as`, `end`)
-  - built-ins (`gfx.*`, `gx3d.*`, `time.*`, `print`)
+  - built-ins (`gfx.*`, `gx3d.*`, `time.*`, `random.*`, `noise.*`, `net.*`, `torch.*`, `math.*`, `numpy.*`, `print`)
   - strings, numbers, operators, comments
 - Editor language configuration:
   - `#` line comments
   - auto-closing pairs
   - block folding hints for `if/while ... end`
 - Snippets:
-  - `if`, `while`, `importas`, `obj`, `gfxloop`, `gx3d`
+  - `if`, `while`, `importas`, `obj`, `gfxloop`, `gx3d`, `netgame`, `matharr`, `torchdemo`
 
 ## Install Locally
 
@@ -30,4 +30,3 @@ vsce package
 ```
 
 Then install generated `.vsix`.
-

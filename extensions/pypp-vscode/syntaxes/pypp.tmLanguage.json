@@ -13,7 +13,7 @@
     },
     {
       "name": "support.function.pypp",
-      "match": "\\b(gfx|gx3d|time)\\.[A-Za-z_][A-Za-z0-9_]*\\b"
+      "match": "\\b(gfx|gx3d|time|random|noise|net|torch|math|numpy)\\.[A-Za-z_][A-Za-z0-9_]*\\b"
     },
     {
       "name": "support.function.pypp",
@@ -41,4 +41,3 @@
   ],
   "repository": {}
 }
-
