@@ -1,0 +1,313 @@
+gfx.window_ratio(960, 540, 16, 9, "py++ Snake")
+gfx.keep_aspect(1)
+gfx.refresh_rate(60)
+
+random.seed(2026)
+
+let cell = 24
+let cols = 30
+let rows = 20
+let board_x = 120
+let board_y = 30
+
+let game_state = 0
+let score = 0
+
+let snake = math.array(0, 0, -1, 0, -2, 0)
+let dir_x = 1
+let dir_y = 0
+let next_dir_x = 1
+let next_dir_y = 0
+let food_x = 5
+let food_y = 5
+let grow = 0
+let step_timer = 0
+let step_frames = 8
+
+while gfx.closed() == 0:
+  gfx.poll()
+  if gfx.key_down(27) == 1:
+    gfx.close()
+  end
+
+  # ---------- MENU ----------
+  if game_state == 0:
+    gfx.clear(12, 16, 28)
+    gfx.rect(0, 0, 960, 120, 18, 26, 44)
+    gfx.rect(0, 120, 960, 420, 10, 14, 24)
+
+    gfx.text(320, 70, "PY++ SNAKE", 160, 255, 190)
+    gfx.text(260, 96, "WASD TO MOVE  ENTER TO START", 180, 210, 255)
+
+    let start_clicked = gfx.button(380, 220, 200, 56)
+    let exit_clicked = gfx.button(380, 300, 200, 56)
+
+    gfx.text(438, 240, "START", 220, 240, 255)
+    gfx.text(446, 320, "EXIT", 255, 220, 220)
+
+    if gfx.key_down(13) == 1:
+      let start_clicked = 1
+    end
+
+    if start_clicked == 1:
+      let snake = math.array(0, 0, -1, 0, -2, 0)
+      let dir_x = 1
+      let dir_y = 0
+      let next_dir_x = 1
+      let next_dir_y = 0
+      let score = 0
+      let grow = 0
+      let step_timer = 0
+
+      let ok = 0
+      while ok == 0:
+        let food_x = random.randint(0, cols - 1)
+        let food_y = random.randint(0, rows - 1)
+        let ok = 1
+        let i = 0
+        let segs = math.len(snake) / 2
+        while i < segs:
+          let sx = math.get(snake, i * 2)
+          let sy = math.get(snake, i * 2 + 1)
+          if food_x == sx:
+            if food_y == sy:
+              let ok = 0
+            end
+          end
+          let i = i + 1
+        end
+      end
+
+      let game_state = 1
+    end
+
+    if exit_clicked == 1:
+      gfx.close()
+    end
+  end
+
+  # ---------- PLAY ----------
+  if game_state == 1:
+    if gfx.key_down(87) == 1:
+      if dir_y != 1:
+        let next_dir_x = 0
+        let next_dir_y = -1
+      end
+    end
+    if gfx.key_down(83) == 1:
+      if dir_y != -1:
+        let next_dir_x = 0
+        let next_dir_y = 1
+      end
+    end
+    if gfx.key_down(65) == 1:
+      if dir_x != 1:
+        let next_dir_x = -1
+        let next_dir_y = 0
+      end
+    end
+    if gfx.key_down(68) == 1:
+      if dir_x != -1:
+        let next_dir_x = 1
+        let next_dir_y = 0
+      end
+    end
+
+    let step_timer = step_timer + 1
+    if step_timer >= step_frames:
+      let step_timer = 0
+      let dir_x = next_dir_x
+      let dir_y = next_dir_y
+
+      let head_x = math.get(snake, 0)
+      let head_y = math.get(snake, 1)
+      let new_x = head_x + dir_x
+      let new_y = head_y + dir_y
+
+      # Wall collision
+      if new_x < 0:
+        let game_state = 2
+      end
+      if new_x >= cols:
+        let game_state = 2
+      end
+      if new_y < 0:
+        let game_state = 2
+      end
+      if new_y >= rows:
+        let game_state = 2
+      end
+
+      # Self collision
+      let j = 0
+      let segs = math.len(snake) / 2
+      while j < segs:
+        let sx = math.get(snake, j * 2)
+        let sy = math.get(snake, j * 2 + 1)
+        if new_x == sx:
+          if new_y == sy:
+            let game_state = 2
+          end
+        end
+        let j = j + 1
+      end
+
+      if game_state == 1:
+        let next_snake = math.array(new_x, new_y)
+        let k = 0
+        let n = math.len(snake)
+        while k < n:
+          math.push(next_snake, math.get(snake, k))
+          let k = k + 1
+        end
+
+        if new_x == food_x:
+          if new_y == food_y:
+            let grow = 1
+            let score = score + 1
+          end
+        end
+
+        if grow == 0:
+          math.pop(next_snake)
+          math.pop(next_snake)
+        end
+        if grow != 0:
+          let grow = 0
+          let ok2 = 0
+          while ok2 == 0:
+            let food_x = random.randint(0, cols - 1)
+            let food_y = random.randint(0, rows - 1)
+            let ok2 = 1
+            let a = 0
+            let seg2 = math.len(next_snake) / 2
+            while a < seg2:
+              let sx2 = math.get(next_snake, a * 2)
+              let sy2 = math.get(next_snake, a * 2 + 1)
+              if food_x == sx2:
+                if food_y == sy2:
+                  let ok2 = 0
+                end
+              end
+              let a = a + 1
+            end
+          end
+        end
+
+        let snake = next_snake
+      end
+    end
+
+    # Render
+    gfx.clear(18, 20, 24)
+    gfx.rect(board_x - 4, board_y - 4, cols * cell + 8, rows * cell + 8, 50, 60, 80)
+    gfx.rect(board_x, board_y, cols * cell, rows * cell, 24, 30, 40)
+
+    # Grid
+    let gx = 0
+    while gx <= cols:
+      let x = board_x + gx * cell
+      gfx.line(x, board_y, x, board_y + rows * cell, 32, 40, 54)
+      let gx = gx + 1
+    end
+    let gy = 0
+    while gy <= rows:
+      let y = board_y + gy * cell
+      gfx.line(board_x, y, board_x + cols * cell, y, 32, 40, 54)
+      let gy = gy + 1
+    end
+
+    # Food
+    let fx = board_x + food_x * cell + cell / 2
+    let fy = board_y + food_y * cell + cell / 2
+    gfx.circle(fx, fy, cell / 2 - 4, 255, 110, 110)
+
+    # Snake
+    let s = 0
+    let sc = math.len(snake) / 2
+    while s < sc:
+      let sx = math.get(snake, s * 2)
+      let sy = math.get(snake, s * 2 + 1)
+      let px = board_x + sx * cell + 2
+      let py = board_y + sy * cell + 2
+      if s == 0:
+        gfx.rect(px, py, cell - 4, cell - 4, 150, 255, 160)
+      end
+      if s != 0:
+        gfx.rect(px, py, cell - 4, cell - 4, 90, 220, 120)
+      end
+      let s = s + 1
+    end
+
+    # Score bar
+    gfx.rect(120, 500, 720, 22, 35, 45, 60)
+    let meter = 20 + score * 14
+    if meter > 700:
+      let meter = 700
+    end
+    gfx.rect(130, 504, meter, 14, 120, 220, 140)
+    gfx.text(120, 476, "SCORE", 220, 235, 255)
+    gfx.text(220, 476, score, 220, 255, 180)
+  end
+
+  # ---------- GAME OVER ----------
+  if game_state == 2:
+    gfx.clear(28, 14, 14)
+    gfx.rect(180, 150, 600, 220, 44, 20, 20)
+    gfx.rect_outline(180, 150, 600, 220, 255, 160, 160)
+
+    gfx.text(362, 188, "GAME OVER", 255, 190, 190)
+    gfx.text(256, 220, "PRESS R FOR RETRY", 220, 140, 140)
+    gfx.text(280, 242, "PRESS M FOR MENU", 220, 140, 140)
+
+    let retry_clicked = gfx.button(300, 290, 160, 52)
+    let menu_clicked = gfx.button(500, 290, 160, 52)
+
+    gfx.text(344, 307, "RETRY", 220, 240, 255)
+    gfx.text(548, 307, "MENU", 255, 220, 220)
+
+    if gfx.key_down(82) == 1:
+      let retry_clicked = 1
+    end
+    if gfx.key_down(77) == 1:
+      let menu_clicked = 1
+    end
+
+    if retry_clicked == 1:
+      let snake = math.array(0, 0, -1, 0, -2, 0)
+      let dir_x = 1
+      let dir_y = 0
+      let next_dir_x = 1
+      let next_dir_y = 0
+      let score = 0
+      let grow = 0
+      let step_timer = 0
+
+      let ok3 = 0
+      while ok3 == 0:
+        let food_x = random.randint(0, cols - 1)
+        let food_y = random.randint(0, rows - 1)
+        let ok3 = 1
+        let b = 0
+        let seg3 = math.len(snake) / 2
+        while b < seg3:
+          let sx3 = math.get(snake, b * 2)
+          let sy3 = math.get(snake, b * 2 + 1)
+          if food_x == sx3:
+            if food_y == sy3:
+              let ok3 = 0
+            end
+          end
+          let b = b + 1
+        end
+      end
+      let game_state = 1
+    end
+
+    if menu_clicked == 1:
+      let game_state = 0
+    end
+  end
+
+  gfx.present()
+end

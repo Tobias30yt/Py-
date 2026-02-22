@@ -1,0 +1,71 @@
+gfx.window_ratio(960, 540, 16, 9, "py++ Shader + Animation Demo")
+gfx.keep_aspect(1)
+gfx.refresh_rate(60)
+
+let t = 0
+let mode = 0
+
+while gfx.closed() == 0:
+  gfx.poll()
+  if gfx.key_down(27) == 1:
+    gfx.close()
+  end
+
+  if gfx.key_down(49) == 1:
+    let mode = 0
+    gfx.shader_clear()
+  end
+  if gfx.key_down(50) == 1:
+    let mode = 1
+    gfx.shader_set(1, 850, 0, 0)
+  end
+  if gfx.key_down(51) == 1:
+    let mode = 2
+    gfx.shader_set(2, 90, 0, 0)
+  end
+  if gfx.key_down(52) == 1:
+    let mode = 3
+    gfx.shader_set(3, 6, 90, 2)
+  end
+  if gfx.key_down(53) == 1:
+    let mode = 4
+    gfx.shader_set(4, 1000, 0, 0)
+  end
+  if gfx.key_down(54) == 1:
+    let mode = 5
+    gfx.shader_set(5, 5, 0, 0)
+  end
+  if gfx.key_down(55) == 1:
+    let mode = 6
+    gfx.shader_set(6, 3, 0, 0)
+  end
+  if gfx.key_down(56) == 1:
+    let mode = 7
+    gfx.shader_set(7, 150, 0, 0)
+  end
+
+  gfx.clear(10, 14, 24)
+
+  # Fake "animation" from tick: pulsing square
+  let pulse = (t / 6)
+  if pulse > 20:
+    let pulse = 20
+  end
+  let size = 90 + pulse
+  if size > 110:
+    let size = 110 - (size - 110)
+  end
+  gfx.rect(430, 230, size, size, 120, 220, 150)
+  gfx.rect_outline(430, 230, size, size, 220, 250, 230)
+
+  gfx.text(20, 20, "SHADER DEMO", 230, 240, 255)
+  gfx.text(20, 36, "1 NONE 2 GRAY 3 SCAN 4 WAVE", 180, 220, 255)
+  gfx.text(20, 48, "5 INVERT 6 POSTERIZE 7 RGBSPLIT 8 VIGNETTE", 180, 220, 255)
+  gfx.text(20, 64, "MODE:", 220, 240, 255)
+  gfx.text(58, 64, mode, 220, 255, 180)
+  gfx.text(20, 76, "TICK:", 220, 240, 255)
+  gfx.text(58, 76, t, 220, 255, 180)
+
+  gfx.present()
+  let t = t + 1
+end

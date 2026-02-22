@@ -1,0 +1,222 @@
+gfx.window_ratio(1280, 720, 16, 9, "py++ 3D Snake")
+gfx.keep_aspect(1)
+gfx.refresh_rate(120)
+
+random.seed(1337)
+
+let grid_w = 20
+let grid_h = 14
+let cell = 52
+let z_base = 1050
+let board_w = grid_w * cell
+let board_h = grid_h * cell
+
+let snake = math.array(0, 0, -1, 0, -2, 0)
+let dir_x = 1
+let dir_z = 0
+let next_dir_x = 1
+let next_dir_z = 0
+
+let food_x = random.randint(-9, 9)
+let food_z = random.randint(-6, 6)
+let grow = 0
+let score = 0
+let game_over = 0
+
+let frame = 0
+let step_frames = 7
+
+gx3d.reset()
+gx3d.fov(410)
+gx3d.clip(8, 20000)
+gx3d.camera(0, 240, -980)
+
+while gfx.closed() == 0:
+  gfx.poll()
+  if gfx.key_down(27) == 1:
+    gfx.close()
+  end
+
+  if game_over == 0:
+    if gfx.key_down(87) == 1:
+      if dir_z != 1:
+        let next_dir_x = 0
+        let next_dir_z = -1
+      end
+    end
+    if gfx.key_down(83) == 1:
+      if dir_z != -1:
+        let next_dir_x = 0
+        let next_dir_z = 1
+      end
+    end
+    if gfx.key_down(65) == 1:
+      if dir_x != 1:
+        let next_dir_x = -1
+        let next_dir_z = 0
+      end
+    end
+    if gfx.key_down(68) == 1:
+      if dir_x != -1:
+        let next_dir_x = 1
+        let next_dir_z = 0
+      end
+    end
+  end
+
+  if game_over == 1:
+    if gfx.key_down(82) == 1:
+      let snake = math.array(0, 0, -1, 0, -2, 0)
+      let dir_x = 1
+      let dir_z = 0
+      let next_dir_x = 1
+      let next_dir_z = 0
+      let food_x = random.randint(-9, 9)
+      let food_z = random.randint(-6, 6)
+      let grow = 0
+      let score = 0
+      let game_over = 0
+      let frame = 0
+    end
+  end
+
+  let frame = frame + 1
+  if frame >= step_frames:
+    let frame = 0
+
+    if game_over == 0:
+      let dir_x = next_dir_x
+      let dir_z = next_dir_z
+
+      let head_x = math.get(snake, 0)
+      let head_z = math.get(snake, 1)
+      let new_x = head_x + dir_x
+      let new_z = head_z + dir_z
+
+      if new_x < -10:
+        let game_over = 1
+      end
+      if new_x > 9:
+        let game_over = 1
+      end
+      if new_z < -7:
+        let game_over = 1
+      end
+      if new_z > 6:
+        let game_over = 1
+      end
+
+      let i = 0
+      let segs = math.len(snake) / 2
+      while i < segs:
+        let sx = math.get(snake, i * 2)
+        let sz = math.get(snake, i * 2 + 1)
+        if new_x == sx:
+          if new_z == sz:
+            let game_over = 1
+          end
+        end
+        let i = i + 1
+      end
+
+      if game_over == 0:
+        let next_snake = math.array(new_x, new_z)
+        let j = 0
+        let n = math.len(snake)
+        while j < n:
+          math.push(next_snake, math.get(snake, j))
+          let j = j + 1
+        end
+
+        if new_x == food_x:
+          if new_z == food_z:
+            let grow = 1
+            let score = score + 1
+          end
+        end
+
+        if grow == 0:
+          math.pop(next_snake)
+          math.pop(next_snake)
+        end
+        if grow != 0:
+          let grow = 0
+          let ok = 0
+          while ok == 0:
+            let food_x = random.randint(-9, 9)
+            let food_z = random.randint(-6, 6)
+            let ok = 1
+            let k = 0
+            let seg_count = math.len(next_snake) / 2
+            while k < seg_count:
+              let tx = math.get(next_snake, k * 2)
+              let tz = math.get(next_snake, k * 2 + 1)
+              if food_x == tx:
+                if food_z == tz:
+                  let ok = 0
+                end
+              end
+              let k = k + 1
+            end
+          end
+        end
+
+        let snake = next_snake
+      end
+    end
+  end
+
+  gfx.clear(7, 10, 18)
+  gx3d.rotate(24, 0, 0)
+  gx3d.scale_uniform(1000)
+  gx3d.translate(0, 0, 0)
+
+  # Arena floor
+  gx3d.quad_solid(-board_w / 2, 80, z_base - board_h / 2, board_w / 2, 80, z_base - board_h / 2, board_w / 2, 80, z_base + board_h / 2, -board_w / 2, 80, z_base + board_h / 2, 20, 30, 46)
+  gx3d.grid(board_w / 2, cell, 80)
+
+  # Border walls
+  gx3d.cuboid_solid(0, 20, z_base - board_h / 2, board_w + 70, 90, 26, 70, 90, 130)
+  gx3d.cuboid_solid(0, 20, z_base + board_h / 2, board_w + 70, 90, 26, 70, 90, 130)
+  gx3d.cuboid_solid(-board_w / 2, 20, z_base, 26, 90, board_h + 70, 70, 90, 130)
+  gx3d.cuboid_solid(board_w / 2, 20, z_base, 26, 90, board_h + 70, 70, 90, 130)
+
+  # Snake
+  let idx = 0
+  let segment_count = math.len(snake) / 2
+  while idx < segment_count:
+    let sx = math.get(snake, idx * 2) * cell
+    let sz = z_base + math.get(snake, idx * 2 + 1) * cell
+    if idx == 0:
+      if game_over == 0:
+        gx3d.cuboid_solid(sx, 28, sz, 42, 42, 42, 150, 255, 170)
+      end
+      if game_over != 0:
+        gx3d.cuboid_solid(sx, 28, sz, 42, 42, 42, 255, 110, 110)
+      end
+    end
+    if idx != 0:
+      gx3d.cuboid_solid(sx, 24, sz, 40, 40, 40, 90, 210, 120)
+    end
+    let idx = idx + 1
+  end
+
+  # Food
+  let fx = food_x * cell
+  let fz = z_base + food_z * cell
+  gx3d.sphere(fx, 30, fz, 18, 14, 255, 120, 90)
+
+  # UI bars for score + game over state
+  let score_w = 30 + score * 12
+  if score_w > 460:
+    let score_w = 460
+  end
+  gfx.rect(18, 18, 470, 18, 35, 50, 80)
+  gfx.rect(20, 20, score_w, 14, 120, 220, 140)
+  if game_over == 1:
+    gfx.rect(500, 18, 320, 28, 110, 20, 20)
+    gfx.rect_outline(500, 18, 320, 28, 255, 140, 140)
+  end
+
+  gfx.present()
+end

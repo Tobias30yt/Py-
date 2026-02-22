@@ -1,6 +1,6 @@
 # 3D Graphics (`gx3d`)
 
-`gx3d` is the built-in wireframe 3D library in `py++`.
+`gx3d` is the built-in 3D library in `py++`.
 It projects 3D primitives into the active `gfx` framebuffer/window with configurable camera, clipping, and transform state.
 
 ## Rendering Model
@@ -9,7 +9,7 @@ It projects 3D primitives into the active `gfx` framebuffer/window with configur
 - Perspective projection
 - Camera translation
 - Object Euler rotation (degrees)
-- Draw output through `gfx.line`
+- Draw output through `gfx` with depth-tested solid support
 
 ## API Reference
 
@@ -29,10 +29,22 @@ It projects 3D primitives into the active `gfx` framebuffer/window with configur
   - Adds to current rotation
 - `gx3d.translate(x, y, z)`
   - Sets object-space translation state
+- `gx3d.scale(sx, sy, sz)`
+  - Sets object scale (`1000` means `1.0`)
+- `gx3d.scale_uniform(s)`
+  - Uniform object scale (`1000` means `1.0`)
 - `gx3d.point(x, y, z, r, g, b)`
   - Projects one 3D point
 - `gx3d.line(x1, y1, z1, x2, y2, z2, r, g, b)`
   - Draws one 3D line segment
+- `gx3d.triangle(x1,y1,z1,x2,y2,z2,x3,y3,z3,r,g,b)`
+  - Draws wireframe triangle
+- `gx3d.triangle_solid(x1,y1,z1,x2,y2,z2,x3,y3,z3,r,g,b)`
+  - Draws filled depth-tested triangle
+- `gx3d.quad(x1,y1,z1,x2,y2,z2,x3,y3,z3,x4,y4,z4,r,g,b)`
+  - Draws wireframe quad (two connected triangles)
+- `gx3d.quad_solid(x1,y1,z1,x2,y2,z2,x3,y3,z3,x4,y4,z4,r,g,b)`
+  - Draws filled depth-tested quad (two triangles)
 - `gx3d.cube(x, y, z, size, r, g, b)`
   - Draws wireframe cube centered at `(x,y,z)`
 - `gx3d.cube_solid(x, y, z, size, r, g, b)`
@@ -49,6 +61,8 @@ It projects 3D primitives into the active `gfx` framebuffer/window with configur
   - Draws a textured cube using a loaded `gfx` sprite
 - `gx3d.cuboid_sprite(x, y, z, sx, sy, sz, sprite_id)`
   - Draws a textured cuboid using a loaded `gfx` sprite
+- `gx3d.sphere(x, y, z, radius, segments, r, g, b)`
+  - Draws wireframe sphere
 - `gx3d.axis(len)`
   - Draws world axes
 - `gx3d.grid(size, step, y)`
@@ -99,11 +113,10 @@ gfx.present()
 
 ## Current Limits
 
-- no filled triangles
-- depth is currently used for solid cuboids/cubes/pyramids
-- textured cube/cuboid support is sprite-based (nearest sampling)
-- no dynamic lights/material system yet
-- no mesh importer yet
+- no full mesh importer yet (OBJ/GLTF)
+- no dynamic lights/material pipeline yet
+- textured rendering is sprite-based on cuboid/cube primitives
+- no clipping against screen edges beyond projected primitive raster
 
 ## Stability Notes
 
@@ -115,11 +128,10 @@ gfx.present()
 
 ## Planned Next 3D Steps
 
-- filled triangle rasterizer
-- Z-buffer
-- mesh loading
-- camera controls (free-fly)
-- sprite/texture support in 2.5D
+- mesh loading (OBJ first)
+- basic directional lighting and face normals
+- depth-tested textured triangles
+- camera helper API (look_at / yaw-pitch move)
 
 Back: [[Graphics]]  
 Next: [[Documentation]]  

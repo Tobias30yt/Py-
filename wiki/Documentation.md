@@ -55,12 +55,22 @@ Prints runtime/compiler version.
 
 - `gfx.window_ratio(w, h, ratio_w, ratio_h, "title")`
 - `gfx.keep_aspect(enabled)`
+- `gfx.refresh_rate(hz)` (`0` disables pacing)
+- `gfx.sync()` (manual frame pacing call)
 - `gfx.mouse_x()`, `gfx.mouse_y()`
 - `gfx.mouse_down(button)`
 - `gfx.mouse_dx()`, `gfx.mouse_dy()`
 - `gfx.mouse_lock(enabled)`
 - `gfx.mouse_show(visible)`
 - `gfx.button(x, y, w, h)`
+- `gfx.text(x, y, "TEXT", r, g, b)`
+- `gfx.anim_register(first_sprite, frame_count, frame_ticks, mode)` (`0` once, `1` loop, `2` ping-pong)
+- `gfx.anim_frame(anim_id, tick)`
+- `gfx.anim_length(anim_id)`
+- `gfx.anim_draw(anim_id, tick, x, y)`
+- `gfx.anim_draw_scaled(anim_id, tick, x, y, w, h)`
+- `gfx.shader_set(mode, p1, p2, p3)` (`1` grayscale, `2` scanline, `3` wave, `4` invert, `5` posterize, `6` rgb-split, `7` vignette)
+- `gfx.shader_clear()`
 
 ### `gx3d` additions
 
@@ -68,6 +78,13 @@ Prints runtime/compiler version.
 - `gx3d.cuboid_sprite(x, y, z, sx, sy, sz, sprite_id)`
 - `gx3d.pyramid(x, y, z, size, r, g, b)`
 - `gx3d.pyramid_solid(x, y, z, size, r, g, b)`
+- `gx3d.scale(sx, sy, sz)` (`1000 = 1.0`)
+- `gx3d.scale_uniform(s)` (`1000 = 1.0`)
+- `gx3d.triangle(...)`
+- `gx3d.triangle_solid(...)`
+- `gx3d.quad(...)`
+- `gx3d.quad_solid(...)`
+- `gx3d.sphere(x, y, z, radius, segments, r, g, b)`
 
 ### `random` + `noise` standard utilities
 

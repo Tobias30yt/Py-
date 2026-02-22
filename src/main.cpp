@@ -11,6 +11,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <random>
 #include <limits>
@@ -678,6 +679,13 @@ struct GraphicsState {
     std::vector<SpriteTexel> texels;
   };
   std::vector<SpriteAsset> sprites;
+  struct AnimClip {
+    int first_sprite = 0;
+    int frame_count = 0;
+    int frame_ticks = 1;
+    int playback_mode = 1;  // 0=once, 1=loop, 2=ping-pong
+  };
+  std::vector<AnimClip> anims;
 #ifdef _WIN32
   HWND hwnd = nullptr;
   bool window_open = false;
@@ -699,6 +707,14 @@ struct GraphicsState {
   int mouse_dy_acc = 0;
   bool suppress_mouse_delta = false;
 #endif
+  int shader_mode = 0;
+  int shader_p1 = 0;
+  int shader_p2 = 0;
+  int shader_p3 = 0;
+  int present_frame = 0;
+  int refresh_rate_hz = 0;
+  std::chrono::steady_clock::time_point next_frame_time{};
+  bool frame_sync_ready = false;
 
   bool IsOpen() const { return width > 0 && height > 0; }
 
@@ -709,6 +725,11 @@ struct GraphicsState {
     width = w;
     height = h;
     pixels.assign(static_cast<std::size_t>(w * h), Pixel{0, 0, 0});
+    present_frame = 0;
+    shader_mode = 0;
+    shader_p1 = 0;
+    shader_p2 = 0;
+    shader_p3 = 0;
   }
 
   void Clear(int r, int g, int b) {
@@ -914,6 +935,19 @@ struct GraphicsState {
 #endif
   }
 
+  void SetRefreshRate(int hz) {
+    if (hz <= 0) {
+      refresh_rate_hz = 0;
+      frame_sync_ready = false;
+      return;
+    }
+    if (hz > 1000) {
+      hz = 1000;
+    }
+    refresh_rate_hz = hz;
+    frame_sync_ready = false;
+  }
+
   int PollEvents() {
 #ifdef _WIN32
     if (!window_open) {
@@ -959,38 +993,39 @@ struct GraphicsState {
     if (rgba_buffer.size() != static_cast<std::size_t>(width * height)) {
       rgba_buffer.assign(static_cast<std::size_t>(width * height), 0);
     }
-    for (int y = 0; y < height; ++y) {
-      for (int x = 0; x < width; ++x) {
-        const Pixel& p = pixels[static_cast<std::size_t>(y * width + x)];
-        std::uint32_t value = (static_cast<std::uint32_t>(p.b) << 16) |
-                              (static_cast<std::uint32_t>(p.g) << 8) |
-                              static_cast<std::uint32_t>(p.r);
-        rgba_buffer[static_cast<std::size_t>(y * width + x)] = value;
-      }
-    }
+    BuildPresentBuffer();
 
     HDC hdc = GetDC(hwnd);
-    BITMAPINFO bmi{};
-    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    bmi.bmiHeader.biWidth = width;
-    bmi.bmiHeader.biHeight = -height;
-    bmi.bmiHeader.biPlanes = 1;
-    bmi.bmiHeader.biBitCount = 32;
-    bmi.bmiHeader.biCompression = BI_RGB;
-
-    UpdateViewportRect();
-    const int dst_x = viewport_rect.left;
-    const int dst_y = viewport_rect.top;
-    const int dst_w = std::max(1, static_cast<int>(viewport_rect.right - viewport_rect.left));
-    const int dst_h =
-        std::max(1, static_cast<int>(viewport_rect.bottom - viewport_rect.top));
-    StretchDIBits(hdc, dst_x, dst_y, dst_w, dst_h, 0, 0, width, height,
-                  rgba_buffer.data(), &bmi, DIB_RGB_COLORS, SRCCOPY);
+    BlitFrameToHdc(hdc);
     ReleaseDC(hwnd, hdc);
+    present_frame += 1;
+    SyncFrame();
     return 1;
 #else
     return 0;
 #endif
+  }
+
+  int SyncFrame() {
+    if (refresh_rate_hz <= 0) {
+      return 0;
+    }
+    const auto frame_dt =
+        std::chrono::nanoseconds(1000000000LL / refresh_rate_hz);
+    const auto now = std::chrono::steady_clock::now();
+    if (!frame_sync_ready) {
+      next_frame_time = now + frame_dt;
+      frame_sync_ready = true;
+      return 1;
+    }
+    if (now < next_frame_time) {
+      std::this_thread::sleep_for(next_frame_time - now);
+    }
+    auto after_sleep = std::chrono::steady_clock::now();
+    while (next_frame_time <= after_sleep) {
+      next_frame_time += frame_dt;
+    }
+    return 1;
   }
 
   int KeyDown(int code) const {
@@ -1083,6 +1118,105 @@ struct GraphicsState {
     }
     const SpriteAsset& s = GetSprite(sprite_id, "gfx.draw_sprite_scaled");
     BlitSprite(s, x, y, w, h);
+  }
+
+  void ShaderSet(int mode, int p1, int p2, int p3) {
+    shader_mode = mode;
+    shader_p1 = p1;
+    shader_p2 = p2;
+    shader_p3 = p3;
+  }
+
+  void ShaderClear() {
+    shader_mode = 0;
+    shader_p1 = 0;
+    shader_p2 = 0;
+    shader_p3 = 0;
+  }
+
+  int AnimRegister(int first_sprite, int frame_count, int frame_ticks,
+                   int loop_flag) {
+    EnsureOpen("gfx.anim_register");
+    if (frame_count <= 0) {
+      throw std::runtime_error("gfx.anim_register expects frame_count > 0");
+    }
+    if (frame_ticks <= 0) {
+      throw std::runtime_error("gfx.anim_register expects frame_ticks > 0");
+    }
+    if (first_sprite < 0 ||
+        static_cast<std::size_t>(first_sprite + frame_count - 1) >=
+            sprites.size()) {
+      throw std::runtime_error(
+          "gfx.anim_register sprite range out of loaded sprite ids");
+    }
+    AnimClip clip;
+    clip.first_sprite = first_sprite;
+    clip.frame_count = frame_count;
+    clip.frame_ticks = frame_ticks;
+    if (loop_flag < 0 || loop_flag > 2) {
+      throw std::runtime_error("gfx.anim_register mode must be 0, 1, or 2");
+    }
+    clip.playback_mode = loop_flag;
+    anims.push_back(clip);
+    return static_cast<int>(anims.size() - 1);
+  }
+
+  int AnimFrame(int anim_id, int tick) const {
+    if (anim_id < 0 || static_cast<std::size_t>(anim_id) >= anims.size()) {
+      throw std::runtime_error("gfx.anim_frame invalid animation id");
+    }
+    if (tick < 0) {
+      tick = present_frame;
+    }
+    const AnimClip& clip = anims[static_cast<std::size_t>(anim_id)];
+    int frame_idx = tick / clip.frame_ticks;
+    if (clip.playback_mode == 1) {
+      frame_idx = frame_idx % clip.frame_count;
+    } else if (clip.playback_mode == 2 && clip.frame_count > 1) {
+      const int period = (clip.frame_count * 2) - 2;
+      int k = frame_idx % period;
+      if (k >= clip.frame_count) {
+        k = period - k;
+      }
+      frame_idx = k;
+    } else if (frame_idx >= clip.frame_count) {
+      frame_idx = clip.frame_count - 1;
+    }
+    return clip.first_sprite + frame_idx;
+  }
+
+  int AnimLength(int anim_id) const {
+    if (anim_id < 0 || static_cast<std::size_t>(anim_id) >= anims.size()) {
+      throw std::runtime_error("gfx.anim_length invalid animation id");
+    }
+    const AnimClip& clip = anims[static_cast<std::size_t>(anim_id)];
+    return clip.frame_count;
+  }
+
+  void AnimDraw(int anim_id, int tick, int x, int y) {
+    const int sprite_id = AnimFrame(anim_id, tick);
+    DrawSprite(sprite_id, x, y);
+  }
+
+  void AnimDrawScaled(int anim_id, int tick, int x, int y, int w, int h) {
+    const int sprite_id = AnimFrame(anim_id, tick);
+    DrawSpriteScaled(sprite_id, x, y, w, h);
+  }
+
+  void Text(int x, int y, const std::string& text, int r, int g, int b) {
+    EnsureOpen("gfx.text");
+    Pixel color{ClampColor(r), ClampColor(g), ClampColor(b)};
+    int cx = x;
+    int cy = y;
+    for (char raw : text) {
+      if (raw == '\n') {
+        cx = x;
+        cy += 8;
+        continue;
+      }
+      DrawGlyph5x7(cx, cy, raw, color);
+      cx += 6;
+    }
   }
 
   int MouseX() const {
@@ -1233,6 +1367,255 @@ struct GraphicsState {
     }
   }
 
+  Pixel ReadPixelShaderSource(int x, int y) const {
+    x = std::max(0, std::min(width - 1, x));
+    y = std::max(0, std::min(height - 1, y));
+    return pixels[static_cast<std::size_t>(y * width + x)];
+  }
+
+  void BuildPresentBuffer() {
+    const double pi = 3.14159265358979323846;
+    const int mix = std::max(0, std::min(1000, shader_p1));
+    for (int y = 0; y < height; ++y) {
+      for (int x = 0; x < width; ++x) {
+        Pixel p = ReadPixelShaderSource(x, y);
+
+        if (shader_mode == 1) {
+          // Grayscale mix: p1 in 0..1000
+          int lum = (p.r * 30 + p.g * 59 + p.b * 11) / 100;
+          p.r = (p.r * (1000 - mix) + lum * mix) / 1000;
+          p.g = (p.g * (1000 - mix) + lum * mix) / 1000;
+          p.b = (p.b * (1000 - mix) + lum * mix) / 1000;
+        } else if (shader_mode == 2) {
+          // Scanline darkening: p1 in 0..255
+          const int dark = std::max(0, std::min(255, shader_p1));
+          if (((y + present_frame) & 1) != 0) {
+            p.r = (p.r * (255 - dark)) / 255;
+            p.g = (p.g * (255 - dark)) / 255;
+            p.b = (p.b * (255 - dark)) / 255;
+          }
+        } else if (shader_mode == 3) {
+          // Wave distortion: p1 amplitude px, p2 frequency x1000, p3 speed
+          const int amp = std::max(0, std::min(64, shader_p1));
+          const double freq = std::max(1, shader_p2) / 1000.0;
+          const double speed = static_cast<double>(shader_p3);
+          const double phase = (static_cast<double>(y) * freq) +
+                               (static_cast<double>(present_frame) * speed /
+                                60.0);
+          const int offset = static_cast<int>(std::round(std::sin(phase * pi) *
+                                                         static_cast<double>(amp)));
+          p = ReadPixelShaderSource(x + offset, y);
+        } else if (shader_mode == 4) {
+          // Invert mix: p1 in 0..1000
+          const int inv_r = 255 - p.r;
+          const int inv_g = 255 - p.g;
+          const int inv_b = 255 - p.b;
+          p.r = (p.r * (1000 - mix) + inv_r * mix) / 1000;
+          p.g = (p.g * (1000 - mix) + inv_g * mix) / 1000;
+          p.b = (p.b * (1000 - mix) + inv_b * mix) / 1000;
+        } else if (shader_mode == 5) {
+          // Posterize: p1 levels in 2..64
+          int levels = shader_p1;
+          if (levels < 2) levels = 2;
+          if (levels > 64) levels = 64;
+          const int step = std::max(1, 255 / (levels - 1));
+          p.r = ((p.r + step / 2) / step) * step;
+          p.g = ((p.g + step / 2) / step) * step;
+          p.b = ((p.b + step / 2) / step) * step;
+        } else if (shader_mode == 6) {
+          // RGB split: p1 = x offset in pixels
+          const int off = std::max(0, std::min(24, shader_p1));
+          const Pixel pr = ReadPixelShaderSource(x - off, y);
+          const Pixel pg = ReadPixelShaderSource(x, y);
+          const Pixel pb = ReadPixelShaderSource(x + off, y);
+          p.r = pr.r;
+          p.g = pg.g;
+          p.b = pb.b;
+        } else if (shader_mode == 7) {
+          // Vignette: p1 strength in 0..255
+          const int strength = std::max(0, std::min(255, shader_p1));
+          const double cx = static_cast<double>(width) * 0.5;
+          const double cy = static_cast<double>(height) * 0.5;
+          const double nx = (static_cast<double>(x) - cx) / cx;
+          const double ny = (static_cast<double>(y) - cy) / cy;
+          double d = std::sqrt(nx * nx + ny * ny);
+          if (d > 1.0) d = 1.0;
+          const int dark = static_cast<int>(std::round(d * strength));
+          p.r = (p.r * (255 - dark)) / 255;
+          p.g = (p.g * (255 - dark)) / 255;
+          p.b = (p.b * (255 - dark)) / 255;
+        }
+
+        p.r = ClampColor(p.r);
+        p.g = ClampColor(p.g);
+        p.b = ClampColor(p.b);
+        std::uint32_t value = (static_cast<std::uint32_t>(p.b) << 16) |
+                              (static_cast<std::uint32_t>(p.g) << 8) |
+                              static_cast<std::uint32_t>(p.r);
+        rgba_buffer[static_cast<std::size_t>(y * width + x)] = value;
+      }
+    }
+  }
+
+  using Glyph5x7 = std::array<std::string_view, 7>;
+
+  static const Glyph5x7& GlyphForChar(char raw) {
+    const unsigned char uc = static_cast<unsigned char>(raw);
+    const char c = static_cast<char>(std::toupper(uc));
+
+    static const Glyph5x7 kBlank = {".....", ".....", ".....", ".....", ".....",
+                                    ".....", "....."};
+    static const Glyph5x7 kUnknown = {"XXXXX", "X...X", "...X.", "..X..", "..X..",
+                                      ".....", "..X.."};
+    static const Glyph5x7 k0 = {".XXX.", "X...X", "X..XX", "X.X.X", "XX..X",
+                                "X...X", ".XXX."};
+    static const Glyph5x7 k1 = {"..X..", ".XX..", "..X..", "..X..", "..X..",
+                                "..X..", ".XXX."};
+    static const Glyph5x7 k2 = {".XXX.", "X...X", "....X", "...X.", "..X..",
+                                ".X...", "XXXXX"};
+    static const Glyph5x7 k3 = {"XXXXX", "....X", "...X.", "..XX.", "....X",
+                                "X...X", ".XXX."};
+    static const Glyph5x7 k4 = {"...X.", "..XX.", ".X.X.", "X..X.", "XXXXX",
+                                "...X.", "...X."};
+    static const Glyph5x7 k5 = {"XXXXX", "X....", "XXXX.", "....X", "....X",
+                                "X...X", ".XXX."};
+    static const Glyph5x7 k6 = {".XXX.", "X...X", "X....", "XXXX.", "X...X",
+                                "X...X", ".XXX."};
+    static const Glyph5x7 k7 = {"XXXXX", "....X", "...X.", "..X..", ".X...",
+                                ".X...", ".X..."};
+    static const Glyph5x7 k8 = {".XXX.", "X...X", "X...X", ".XXX.", "X...X",
+                                "X...X", ".XXX."};
+    static const Glyph5x7 k9 = {".XXX.", "X...X", "X...X", ".XXXX", "....X",
+                                "X...X", ".XXX."};
+    static const Glyph5x7 kA = {".XXX.", "X...X", "X...X", "XXXXX", "X...X",
+                                "X...X", "X...X"};
+    static const Glyph5x7 kB = {"XXXX.", "X...X", "X...X", "XXXX.", "X...X",
+                                "X...X", "XXXX."};
+    static const Glyph5x7 kC = {".XXX.", "X...X", "X....", "X....", "X....",
+                                "X...X", ".XXX."};
+    static const Glyph5x7 kD = {"XXXX.", "X...X", "X...X", "X...X", "X...X",
+                                "X...X", "XXXX."};
+    static const Glyph5x7 kE = {"XXXXX", "X....", "X....", "XXXX.", "X....",
+                                "X....", "XXXXX"};
+    static const Glyph5x7 kF = {"XXXXX", "X....", "X....", "XXXX.", "X....",
+                                "X....", "X...."};
+    static const Glyph5x7 kG = {".XXX.", "X...X", "X....", "X.XXX", "X...X",
+                                "X...X", ".XXX."};
+    static const Glyph5x7 kH = {"X...X", "X...X", "X...X", "XXXXX", "X...X",
+                                "X...X", "X...X"};
+    static const Glyph5x7 kI = {".XXX.", "..X..", "..X..", "..X..", "..X..",
+                                "..X..", ".XXX."};
+    static const Glyph5x7 kJ = {"..XXX", "...X.", "...X.", "...X.", "...X.",
+                                "X..X.", ".XX.."};
+    static const Glyph5x7 kK = {"X...X", "X..X.", "X.X..", "XX...", "X.X..",
+                                "X..X.", "X...X"};
+    static const Glyph5x7 kL = {"X....", "X....", "X....", "X....", "X....",
+                                "X....", "XXXXX"};
+    static const Glyph5x7 kM = {"X...X", "XX.XX", "X.X.X", "X...X", "X...X",
+                                "X...X", "X...X"};
+    static const Glyph5x7 kN = {"X...X", "XX..X", "X.X.X", "X..XX", "X...X",
+                                "X...X", "X...X"};
+    static const Glyph5x7 kO = {".XXX.", "X...X", "X...X", "X...X", "X...X",
+                                "X...X", ".XXX."};
+    static const Glyph5x7 kP = {"XXXX.", "X...X", "X...X", "XXXX.", "X....",
+                                "X....", "X...."};
+    static const Glyph5x7 kQ = {".XXX.", "X...X", "X...X", "X...X", "X.X.X",
+                                "X..X.", ".XX.X"};
+    static const Glyph5x7 kR = {"XXXX.", "X...X", "X...X", "XXXX.", "X.X..",
+                                "X..X.", "X...X"};
+    static const Glyph5x7 kS = {".XXXX", "X....", "X....", ".XXX.", "....X",
+                                "....X", "XXXX."};
+    static const Glyph5x7 kT = {"XXXXX", "..X..", "..X..", "..X..", "..X..",
+                                "..X..", "..X.."};
+    static const Glyph5x7 kU = {"X...X", "X...X", "X...X", "X...X", "X...X",
+                                "X...X", ".XXX."};
+    static const Glyph5x7 kV = {"X...X", "X...X", "X...X", "X...X", "X...X",
+                                ".X.X.", "..X.."};
+    static const Glyph5x7 kW = {"X...X", "X...X", "X...X", "X.X.X", "X.X.X",
+                                "XX.XX", "X...X"};
+    static const Glyph5x7 kX = {"X...X", "X...X", ".X.X.", "..X..", ".X.X.",
+                                "X...X", "X...X"};
+    static const Glyph5x7 kY = {"X...X", "X...X", ".X.X.", "..X..", "..X..",
+                                "..X..", "..X.."};
+    static const Glyph5x7 kZ = {"XXXXX", "....X", "...X.", "..X..", ".X...",
+                                "X....", "XXXXX"};
+    static const Glyph5x7 kColon = {".....", "..X..", ".....", ".....", "..X..",
+                                    ".....", "....."};
+    static const Glyph5x7 kDot = {".....", ".....", ".....", ".....", ".....",
+                                  "..X..", "....."};
+    static const Glyph5x7 kEx = {"..X..", "..X..", "..X..", "..X..", "..X..",
+                                 ".....", "..X.."};
+    static const Glyph5x7 kDash = {".....", ".....", ".....", ".XXX.", ".....",
+                                   ".....", "....."};
+    static const Glyph5x7 kPlus = {".....", "..X..", "..X..", "XXXXX", "..X..",
+                                   "..X..", "....."};
+    static const Glyph5x7 kSlash = {"....X", "...X.", "..X..", ".X...", "X....",
+                                    ".....", "....."};
+    static const Glyph5x7 kLParen = {"...X.", "..X..", ".X...", ".X...", ".X...",
+                                     "..X..", "...X."};
+    static const Glyph5x7 kRParen = {".X...", "..X..", "...X.", "...X.", "...X.",
+                                     "..X..", ".X..."};
+
+    if (c == ' ') return kBlank;
+    if (c == '0') return k0;
+    if (c == '1') return k1;
+    if (c == '2') return k2;
+    if (c == '3') return k3;
+    if (c == '4') return k4;
+    if (c == '5') return k5;
+    if (c == '6') return k6;
+    if (c == '7') return k7;
+    if (c == '8') return k8;
+    if (c == '9') return k9;
+    if (c == 'A') return kA;
+    if (c == 'B') return kB;
+    if (c == 'C') return kC;
+    if (c == 'D') return kD;
+    if (c == 'E') return kE;
+    if (c == 'F') return kF;
+    if (c == 'G') return kG;
+    if (c == 'H') return kH;
+    if (c == 'I') return kI;
+    if (c == 'J') return kJ;
+    if (c == 'K') return kK;
+    if (c == 'L') return kL;
+    if (c == 'M') return kM;
+    if (c == 'N') return kN;
+    if (c == 'O') return kO;
+    if (c == 'P') return kP;
+    if (c == 'Q') return kQ;
+    if (c == 'R') return kR;
+    if (c == 'S') return kS;
+    if (c == 'T') return kT;
+    if (c == 'U') return kU;
+    if (c == 'V') return kV;
+    if (c == 'W') return kW;
+    if (c == 'X') return kX;
+    if (c == 'Y') return kY;
+    if (c == 'Z') return kZ;
+    if (c == ':') return kColon;
+    if (c == '.') return kDot;
+    if (c == '!') return kEx;
+    if (c == '-') return kDash;
+    if (c == '+') return kPlus;
+    if (c == '/') return kSlash;
+    if (c == '(') return kLParen;
+    if (c == ')') return kRParen;
+    return kUnknown;
+  }
+
+  void DrawGlyph5x7(int x, int y, char c, const Pixel& color) {
+    const Glyph5x7& glyph = GlyphForChar(c);
+    for (int row = 0; row < 7; ++row) {
+      for (int col = 0; col < 5; ++col) {
+        if (glyph[static_cast<std::size_t>(row)][static_cast<std::size_t>(col)] !=
+            '.') {
+          SetPixelRaw(x + col, y + row, color);
+        }
+      }
+    }
+  }
+
 #ifdef _WIN32
   struct GdiPlusRuntime {
     ULONG_PTR token = 0;
@@ -1309,6 +1692,59 @@ struct GraphicsState {
     viewport_rect = RECT{ox, oy, ox + vw, oy + vh};
   }
 
+  void BlitFrameToHdc(HDC hdc) {
+    BITMAPINFO bmi{};
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = width;
+    bmi.bmiHeader.biHeight = -height;
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+
+    UpdateViewportRect();
+    RECT client_rect{};
+    if (GetClientRect(hwnd, &client_rect)) {
+      const int cw =
+          std::max(1, static_cast<int>(client_rect.right - client_rect.left));
+      const int ch =
+          std::max(1, static_cast<int>(client_rect.bottom - client_rect.top));
+      const int vx = viewport_rect.left;
+      const int vy = viewport_rect.top;
+      const int vw =
+          std::max(1, static_cast<int>(viewport_rect.right - viewport_rect.left));
+      const int vh = std::max(
+          1, static_cast<int>(viewport_rect.bottom - viewport_rect.top));
+      HBRUSH black = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
+
+      if (vy > 0) {
+        RECT top{0, 0, cw, vy};
+        FillRect(hdc, &top, black);
+      }
+      if (vy + vh < ch) {
+        RECT bottom{0, vy + vh, cw, ch};
+        FillRect(hdc, &bottom, black);
+      }
+      if (vx > 0) {
+        RECT left{0, vy, vx, vy + vh};
+        FillRect(hdc, &left, black);
+      }
+      if (vx + vw < cw) {
+        RECT right{vx + vw, vy, cw, vy + vh};
+        FillRect(hdc, &right, black);
+      }
+    }
+
+    SetStretchBltMode(hdc, COLORONCOLOR);
+    const int dst_x = viewport_rect.left;
+    const int dst_y = viewport_rect.top;
+    const int dst_w =
+        std::max(1, static_cast<int>(viewport_rect.right - viewport_rect.left));
+    const int dst_h = std::max(
+        1, static_cast<int>(viewport_rect.bottom - viewport_rect.top));
+    StretchDIBits(hdc, dst_x, dst_y, dst_w, dst_h, 0, 0, width, height,
+                  rgba_buffer.data(), &bmi, DIB_RGB_COLORS, SRCCOPY);
+  }
+
   static LRESULT CALLBACK WndProcStatic(HWND hwnd, UINT msg, WPARAM wparam,
                                         LPARAM lparam) {
     GraphicsState* state = nullptr;
@@ -1340,6 +1776,17 @@ struct GraphicsState {
       case WM_SIZE:
         UpdateViewportRect();
         return 0;
+      case WM_ERASEBKGND:
+        return 1;
+      case WM_PAINT: {
+        PAINTSTRUCT ps{};
+        HDC hdc = BeginPaint(hwnd_handle, &ps);
+        if (window_open && !rgba_buffer.empty() && width > 0 && height > 0) {
+          BlitFrameToHdc(hdc);
+        }
+        EndPaint(hwnd_handle, &ps);
+        return 0;
+      }
       case WM_SIZING:
         if (keep_aspect) {
           RECT* rc = reinterpret_cast<RECT*>(lparam);
@@ -1555,6 +2002,7 @@ class VM {
       cam_ = Vec3{0.0, 0.0, -220.0};
       rot_deg_ = Vec3{0.0, 0.0, 0.0};
       trans_ = Vec3{0.0, 0.0, 0.0};
+      scale_ = Vec3{1.0, 1.0, 1.0};
       fov_ = 300.0;
       near_clip_ = 1.0;
       far_clip_ = 10000.0;
@@ -1588,6 +2036,19 @@ class VM {
     void Translate(int x, int y, int z) {
       trans_ = Vec3{static_cast<double>(x), static_cast<double>(y),
                     static_cast<double>(z)};
+    }
+
+    void Scale(int sx, int sy, int sz) {
+      if (sx <= 0 || sy <= 0 || sz <= 0) {
+        throw std::runtime_error("gx3d.scale expects positive values");
+      }
+      scale_ = Vec3{static_cast<double>(sx) / 1000.0,
+                    static_cast<double>(sy) / 1000.0,
+                    static_cast<double>(sz) / 1000.0};
+    }
+
+    void ScaleUniform(int s) {
+      Scale(s, s, s);
     }
 
     void Fov(int fov) {
@@ -1782,16 +2243,6 @@ class VM {
           continue;
         }
 
-        // Backface culling in screen space
-        const int ax = sv1->x - sv0->x;
-        const int ay = sv1->y - sv0->y;
-        const int bx = sv2->x - sv0->x;
-        const int by = sv2->y - sv0->y;
-        const int cross = ax * by - ay * bx;
-        if (cross >= 0) {
-          continue;
-        }
-
         int shade = 255 - static_cast<int>((sv0->z + sv1->z + sv2->z + sv3->z) / 4.0 / 40.0);
         if (shade < 55) shade = 55;
         if (shade > 255) shade = 255;
@@ -1801,6 +2252,143 @@ class VM {
 
         FillTriangleDepth(*sv0, *sv1, *sv2, sr, sg, sb);
         FillTriangleDepth(*sv0, *sv2, *sv3, sr, sg, sb);
+      }
+    }
+
+    void Triangle(int x1, int y1, int z1, int x2, int y2, int z2, int x3,
+                  int y3, int z3, int r, int g, int b) {
+      RequireGfx("gx3d.triangle");
+      auto p1 = Project(ApplyTransform(Vec3{static_cast<double>(x1),
+                                            static_cast<double>(y1),
+                                            static_cast<double>(z1)}));
+      auto p2 = Project(ApplyTransform(Vec3{static_cast<double>(x2),
+                                            static_cast<double>(y2),
+                                            static_cast<double>(z2)}));
+      auto p3 = Project(ApplyTransform(Vec3{static_cast<double>(x3),
+                                            static_cast<double>(y3),
+                                            static_cast<double>(z3)}));
+      if (!p1.has_value() || !p2.has_value() || !p3.has_value()) {
+        return;
+      }
+      gfx_.Line(p1->first, p1->second, p2->first, p2->second, ClampColor(r),
+                ClampColor(g), ClampColor(b));
+      gfx_.Line(p2->first, p2->second, p3->first, p3->second, ClampColor(r),
+                ClampColor(g), ClampColor(b));
+      gfx_.Line(p3->first, p3->second, p1->first, p1->second, ClampColor(r),
+                ClampColor(g), ClampColor(b));
+    }
+
+    void TriangleSolid(int x1, int y1, int z1, int x2, int y2, int z2, int x3,
+                       int y3, int z3, int r, int g, int b) {
+      RequireGfx("gx3d.triangle_solid");
+      EnsureDepthBuffer();
+      auto sv1 = ProjectVertex(ApplyTransform(Vec3{static_cast<double>(x1),
+                                                   static_cast<double>(y1),
+                                                   static_cast<double>(z1)}));
+      auto sv2 = ProjectVertex(ApplyTransform(Vec3{static_cast<double>(x2),
+                                                   static_cast<double>(y2),
+                                                   static_cast<double>(z2)}));
+      auto sv3 = ProjectVertex(ApplyTransform(Vec3{static_cast<double>(x3),
+                                                   static_cast<double>(y3),
+                                                   static_cast<double>(z3)}));
+      if (!sv1.has_value() || !sv2.has_value() || !sv3.has_value()) {
+        return;
+      }
+      FillTriangleDepth(*sv1, *sv2, *sv3, ClampColor(r), ClampColor(g),
+                        ClampColor(b));
+    }
+
+    void Quad(int x1, int y1, int z1, int x2, int y2, int z2, int x3, int y3,
+              int z3, int x4, int y4, int z4, int r, int g, int b) {
+      RequireGfx("gx3d.quad");
+      Triangle(x1, y1, z1, x2, y2, z2, x3, y3, z3, r, g, b);
+      Triangle(x1, y1, z1, x3, y3, z3, x4, y4, z4, r, g, b);
+    }
+
+    void QuadSolid(int x1, int y1, int z1, int x2, int y2, int z2, int x3,
+                   int y3, int z3, int x4, int y4, int z4, int r, int g,
+                   int b) {
+      RequireGfx("gx3d.quad_solid");
+      TriangleSolid(x1, y1, z1, x2, y2, z2, x3, y3, z3, r, g, b);
+      TriangleSolid(x1, y1, z1, x3, y3, z3, x4, y4, z4, r, g, b);
+    }
+
+    void Sphere(int cx, int cy, int cz, int radius, int segments, int r, int g,
+                int b) {
+      RequireGfx("gx3d.sphere");
+      if (radius <= 0) {
+        return;
+      }
+      if (segments < 4) {
+        segments = 4;
+      }
+      if (segments > 64) {
+        segments = 64;
+      }
+      const double pi = 3.14159265358979323846;
+      auto draw_local_line = [&](const Vec3& a, const Vec3& c) {
+        Vec3 ta = ApplyTransform(a);
+        Vec3 tc = ApplyTransform(c);
+        ta.x += static_cast<double>(cx);
+        ta.y += static_cast<double>(cy);
+        ta.z += static_cast<double>(cz);
+        tc.x += static_cast<double>(cx);
+        tc.y += static_cast<double>(cy);
+        tc.z += static_cast<double>(cz);
+        auto p1 = Project(ta);
+        auto p2 = Project(tc);
+        if (p1.has_value() && p2.has_value()) {
+          gfx_.Line(p1->first, p1->second, p2->first, p2->second, ClampColor(r),
+                    ClampColor(g), ClampColor(b));
+        }
+      };
+      for (int lat = 1; lat < segments; ++lat) {
+        const double t = static_cast<double>(lat) / static_cast<double>(segments);
+        const double phi = -pi / 2.0 + pi * t;
+        const double y = std::sin(phi) * static_cast<double>(radius);
+        const double rr = std::cos(phi) * static_cast<double>(radius);
+        for (int lon = 0; lon < segments; ++lon) {
+          const double a0 = (2.0 * pi * static_cast<double>(lon)) /
+                            static_cast<double>(segments);
+          const double a1 = (2.0 * pi * static_cast<double>(lon + 1)) /
+                            static_cast<double>(segments);
+          const int x0 = static_cast<int>(std::round(std::cos(a0) * rr));
+          const int z0 = static_cast<int>(std::round(std::sin(a0) * rr));
+          const int x1 = static_cast<int>(std::round(std::cos(a1) * rr));
+          const int z1 = static_cast<int>(std::round(std::sin(a1) * rr));
+          draw_local_line(
+              Vec3{static_cast<double>(x0), y, static_cast<double>(z0)},
+              Vec3{static_cast<double>(x1), y, static_cast<double>(z1)});
+        }
+      }
+      // Longitudinal arcs
+      for (int lon = 0; lon < segments; ++lon) {
+        const double a = (2.0 * pi * static_cast<double>(lon)) /
+                         static_cast<double>(segments);
+        int prev_x = 0;
+        int prev_y = 0;
+        int prev_z = 0;
+        bool has_prev = false;
+        for (int lat = 0; lat <= segments; ++lat) {
+          const double t = static_cast<double>(lat) / static_cast<double>(segments);
+          const double phi = -pi / 2.0 + pi * t;
+          const double rr = std::cos(phi) * static_cast<double>(radius);
+          const int x = static_cast<int>(std::round(std::cos(a) * rr));
+          const int y = static_cast<int>(std::round(std::sin(phi) *
+                                                    static_cast<double>(radius)));
+          const int z = static_cast<int>(std::round(std::sin(a) * rr));
+          if (has_prev) {
+            draw_local_line(
+                Vec3{static_cast<double>(prev_x), static_cast<double>(prev_y),
+                     static_cast<double>(prev_z)},
+                Vec3{static_cast<double>(x), static_cast<double>(y),
+                     static_cast<double>(z)});
+          }
+          prev_x = x;
+          prev_y = y;
+          prev_z = z;
+          has_prev = true;
+        }
       }
     }
 
@@ -1837,14 +2425,6 @@ class VM {
         auto sv1 = ProjectVertex(verts[static_cast<std::size_t>(f[1])]);
         auto sv2 = ProjectVertex(verts[static_cast<std::size_t>(f[2])]);
         if (!sv0.has_value() || !sv1.has_value() || !sv2.has_value()) {
-          continue;
-        }
-        const int ax = sv1->x - sv0->x;
-        const int ay = sv1->y - sv0->y;
-        const int bx = sv2->x - sv0->x;
-        const int by = sv2->y - sv0->y;
-        const int cross = ax * by - ay * bx;
-        if (cross >= 0) {
           continue;
         }
         int shade = 255 - static_cast<int>((sv0->z + sv1->z + sv2->z) / 3.0 / 45.0);
@@ -1922,15 +2502,6 @@ class VM {
           continue;
         }
 
-        const int ax = s1->x - s0->x;
-        const int ay = s1->y - s0->y;
-        const int bx = s2->x - s0->x;
-        const int by = s2->y - s0->y;
-        const int cross = ax * by - ay * bx;
-        if (cross >= 0) {
-          continue;
-        }
-
         FillTriangleDepthTextured(*s0, *s1, *s2, spr);
         FillTriangleDepthTextured(*s0, *s2, *s3, spr);
       }
@@ -1991,6 +2562,9 @@ class VM {
     }
 
     Vec3 ApplyTransform(Vec3 v) const {
+      v.x *= scale_.x;
+      v.y *= scale_.y;
+      v.z *= scale_.z;
       v = RotateVec(v, rot_deg_);
       v.x += trans_.x;
       v.y += trans_.y;
@@ -2009,9 +2583,18 @@ class VM {
     std::optional<ScreenVertex> ProjectVertex(const Vec3& world) const {
       const double x = world.x - cam_.x;
       const double y = world.y - cam_.y;
-      const double z = world.z - cam_.z;
-      if (z <= near_clip_ || z >= far_clip_) {
+      double z = world.z - cam_.z;
+
+      // Reject points behind camera. Near-plane crossing points are clamped to
+      // avoid face popping/flicker when objects move very close to the camera.
+      if (z <= 0.0) {
         return std::nullopt;
+      }
+      if (z >= far_clip_) {
+        return std::nullopt;
+      }
+      if (z < near_clip_) {
+        z = near_clip_;
       }
 
       const double sx = (x / z) * fov_ + static_cast<double>(gfx_.Width()) / 2.0;
@@ -2072,14 +2655,16 @@ class VM {
           const double w1 = ((b.y - c.y) * (px - c.x) + (c.x - b.x) * (py - c.y)) / denom;
           const double w2 = ((c.y - a.y) * (px - c.x) + (a.x - c.x) * (py - c.y)) / denom;
           const double w3 = 1.0 - w1 - w2;
-          if (w1 < 0.0 || w2 < 0.0 || w3 < 0.0) {
+          const bool inside_ccw = (w1 >= 0.0 && w2 >= 0.0 && w3 >= 0.0);
+          const bool inside_cw = (w1 <= 0.0 && w2 <= 0.0 && w3 <= 0.0);
+          if (!inside_ccw && !inside_cw) {
             continue;
           }
 
           const double z = w1 * a.z + w2 * b.z + w3 * c.z;
           const std::size_t idx =
               static_cast<std::size_t>(y * gfx_.Width() + x);
-          if (z < depth_[idx]) {
+          if (z <= depth_[idx]) {
             depth_[idx] = z;
             gfx_.PixelAtFast(x, y, r, g, bl);
           }
@@ -2120,14 +2705,16 @@ class VM {
           const double w2 =
               ((c.y - a.y) * (px - c.x) + (a.x - c.x) * (py - c.y)) / denom;
           const double w3 = 1.0 - w1 - w2;
-          if (w1 < 0.0 || w2 < 0.0 || w3 < 0.0) {
+          const bool inside_ccw = (w1 >= 0.0 && w2 >= 0.0 && w3 >= 0.0);
+          const bool inside_cw = (w1 <= 0.0 && w2 <= 0.0 && w3 <= 0.0);
+          if (!inside_ccw && !inside_cw) {
             continue;
           }
 
           const double z = w1 * a.z + w2 * b.z + w3 * c.z;
           const std::size_t idx =
               static_cast<std::size_t>(y * gfx_.Width() + x);
-          if (z >= depth_[idx]) {
+          if (z > depth_[idx]) {
             continue;
           }
 
@@ -2162,6 +2749,7 @@ class VM {
     Vec3 cam_{0.0, 0.0, -220.0};
     Vec3 rot_deg_{0.0, 0.0, 0.0};
     Vec3 trans_{0.0, 0.0, 0.0};
+    Vec3 scale_{1.0, 1.0, 1.0};
     double fov_ = 300.0;
     double near_clip_ = 1.0;
     double far_clip_ = 10000.0;
@@ -3114,6 +3702,12 @@ class VM {
       stack_.push_back(0);
       return;
     }
+    if (name == "gfx.refresh_rate") {
+      ExpectArgc(name, argc, 1);
+      gfx_.SetRefreshRate(ValueAsInt(args[0], name));
+      stack_.push_back(0);
+      return;
+    }
     if (name == "gfx.poll") {
       ExpectArgc(name, argc, 0);
       stack_.push_back(gfx_.PollEvents());
@@ -3122,6 +3716,12 @@ class VM {
     if (name == "gfx.present") {
       ExpectArgc(name, argc, 0);
       stack_.push_back(gfx_.Present());
+      gx3d_.OnFrameReset();
+      return;
+    }
+    if (name == "gfx.sync") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(gfx_.SyncFrame());
       return;
     }
     if (name == "gfx.key_down") {
@@ -3209,6 +3809,68 @@ class VM {
       stack_.push_back(0);
       return;
     }
+    if (name == "gfx.shader_set") {
+      ExpectArgc(name, argc, 4);
+      gfx_.ShaderSet(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                     ValueAsInt(args[2], name), ValueAsInt(args[3], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.shader_clear") {
+      ExpectArgc(name, argc, 0);
+      gfx_.ShaderClear();
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.anim_register") {
+      ExpectArgc(name, argc, 4);
+      stack_.push_back(
+          gfx_.AnimRegister(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                            ValueAsInt(args[2], name), ValueAsInt(args[3], name)));
+      return;
+    }
+    if (name == "gfx.anim_frame") {
+      ExpectArgc(name, argc, 2);
+      stack_.push_back(
+          gfx_.AnimFrame(ValueAsInt(args[0], name), ValueAsInt(args[1], name)));
+      return;
+    }
+    if (name == "gfx.anim_length") {
+      ExpectArgc(name, argc, 1);
+      stack_.push_back(gfx_.AnimLength(ValueAsInt(args[0], name)));
+      return;
+    }
+    if (name == "gfx.anim_draw") {
+      ExpectArgc(name, argc, 4);
+      gfx_.AnimDraw(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                    ValueAsInt(args[2], name), ValueAsInt(args[3], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.anim_draw_scaled") {
+      ExpectArgc(name, argc, 6);
+      gfx_.AnimDrawScaled(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                          ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+                          ValueAsInt(args[4], name), ValueAsInt(args[5], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.text") {
+      ExpectArgc(name, argc, 6);
+      std::string text_value;
+      if (std::holds_alternative<std::string>(args[2])) {
+        text_value = std::get<std::string>(args[2]);
+      } else if (std::holds_alternative<int>(args[2])) {
+        text_value = std::to_string(std::get<int>(args[2]));
+      } else {
+        throw std::runtime_error("gfx.text expects text as string or int");
+      }
+      gfx_.Text(ValueAsInt(args[0], name), ValueAsInt(args[1], name), text_value,
+                ValueAsInt(args[3], name),
+                ValueAsInt(args[4], name), ValueAsInt(args[5], name));
+      stack_.push_back(0);
+      return;
+    }
     if (name == "time.sleep_ms") {
       ExpectArgc(name, argc, 1);
       int ms = ValueAsInt(args[0], name);
@@ -3260,6 +3922,19 @@ class VM {
       stack_.push_back(0);
       return;
     }
+    if (name == "gx3d.scale") {
+      ExpectArgc(name, argc, 3);
+      gx3d_.Scale(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                  ValueAsInt(args[2], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.scale_uniform") {
+      ExpectArgc(name, argc, 1);
+      gx3d_.ScaleUniform(ValueAsInt(args[0], name));
+      stack_.push_back(0);
+      return;
+    }
     if (name == "gx3d.fov") {
       ExpectArgc(name, argc, 1);
       gx3d_.Fov(ValueAsInt(args[0], name));
@@ -3305,6 +3980,54 @@ class VM {
                       ValueAsInt(args[2], name), ValueAsInt(args[3], name),
                       ValueAsInt(args[4], name), ValueAsInt(args[5], name),
                       ValueAsInt(args[6], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.triangle") {
+      ExpectArgc(name, argc, 12);
+      gx3d_.Triangle(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                     ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+                     ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+                     ValueAsInt(args[6], name), ValueAsInt(args[7], name),
+                     ValueAsInt(args[8], name), ValueAsInt(args[9], name),
+                     ValueAsInt(args[10], name), ValueAsInt(args[11], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.triangle_solid") {
+      ExpectArgc(name, argc, 12);
+      gx3d_.TriangleSolid(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                          ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+                          ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+                          ValueAsInt(args[6], name), ValueAsInt(args[7], name),
+                          ValueAsInt(args[8], name), ValueAsInt(args[9], name),
+                          ValueAsInt(args[10], name), ValueAsInt(args[11], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.quad") {
+      ExpectArgc(name, argc, 15);
+      gx3d_.Quad(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                 ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+                 ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+                 ValueAsInt(args[6], name), ValueAsInt(args[7], name),
+                 ValueAsInt(args[8], name), ValueAsInt(args[9], name),
+                 ValueAsInt(args[10], name), ValueAsInt(args[11], name),
+                 ValueAsInt(args[12], name), ValueAsInt(args[13], name),
+                 ValueAsInt(args[14], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.quad_solid") {
+      ExpectArgc(name, argc, 15);
+      gx3d_.QuadSolid(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                      ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+                      ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+                      ValueAsInt(args[6], name), ValueAsInt(args[7], name),
+                      ValueAsInt(args[8], name), ValueAsInt(args[9], name),
+                      ValueAsInt(args[10], name), ValueAsInt(args[11], name),
+                      ValueAsInt(args[12], name), ValueAsInt(args[13], name),
+                      ValueAsInt(args[14], name));
       stack_.push_back(0);
       return;
     }
@@ -3360,6 +4083,15 @@ class VM {
                          ValueAsInt(args[2], name), ValueAsInt(args[3], name),
                          ValueAsInt(args[4], name), ValueAsInt(args[5], name),
                          ValueAsInt(args[6], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.sphere") {
+      ExpectArgc(name, argc, 8);
+      gx3d_.Sphere(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                   ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+                   ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+                   ValueAsInt(args[6], name), ValueAsInt(args[7], name));
       stack_.push_back(0);
       return;
     }

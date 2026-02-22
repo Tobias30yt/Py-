@@ -66,8 +66,10 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gfx.window(w, h, "title")` (live window)
   - `gfx.window_ratio(w, h, ratio_w, ratio_h, "title")`
   - `gfx.keep_aspect(0|1)`
+  - `gfx.refresh_rate(hz)` (`0` disables pacing)
   - `gfx.poll()`
   - `gfx.present()`
+  - `gfx.sync()` (manual frame pacing call)
   - `gfx.key_down(keycode)`
   - `gfx.mouse_x()`, `gfx.mouse_y()`
   - `gfx.mouse_down(button)` (`0` left, `1` right, `2` middle)
@@ -79,6 +81,14 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gfx.load_sprite("assets/player.png")`
   - `gfx.draw_sprite(id, x, y)`
   - `gfx.draw_sprite_scaled(id, x, y, w, h)`
+  - `gfx.anim_register(first_sprite, frame_count, frame_ticks, mode)` (`0` once, `1` loop, `2` ping-pong)
+  - `gfx.anim_frame(anim_id, tick)`
+  - `gfx.anim_length(anim_id)`
+  - `gfx.anim_draw(anim_id, tick, x, y)`
+  - `gfx.anim_draw_scaled(anim_id, tick, x, y, w, h)`
+  - `gfx.shader_set(mode, p1, p2, p3)` (`1` grayscale, `2` scanline, `3` wave, `4` invert, `5` posterize, `6` rgb-split, `7` vignette)
+  - `gfx.shader_clear()`
+  - `gfx.text(x, y, "TEXT", r, g, b)`
   - `gfx.clear(r, g, b)`
   - `gfx.pixel(x, y, r, g, b)`
   - `gfx.line(x1, y1, x2, y2, r, g, b)`
@@ -97,12 +107,19 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gx3d.rotate(rx, ry, rz)`
   - `gx3d.rotate_add(drx, dry, drz)`
   - `gx3d.translate(x, y, z)`
+  - `gx3d.scale(sx, sy, sz)` (1000 = 1.0 scale)
+  - `gx3d.scale_uniform(s)` (1000 = 1.0 scale)
   - `gx3d.point(x, y, z, r, g, b)`
   - `gx3d.line(x1, y1, z1, x2, y2, z2, r, g, b)`
+  - `gx3d.triangle(x1,y1,z1,x2,y2,z2,x3,y3,z3,r,g,b)`
+  - `gx3d.triangle_solid(x1,y1,z1,x2,y2,z2,x3,y3,z3,r,g,b)`
+  - `gx3d.quad(x1,y1,z1,x2,y2,z2,x3,y3,z3,x4,y4,z4,r,g,b)`
+  - `gx3d.quad_solid(x1,y1,z1,x2,y2,z2,x3,y3,z3,x4,y4,z4,r,g,b)`
   - `gx3d.cube(x, y, z, size, r, g, b)`
   - `gx3d.cube_solid(x, y, z, size, r, g, b)`
   - `gx3d.pyramid(x, y, z, size, r, g, b)`
   - `gx3d.pyramid_solid(x, y, z, size, r, g, b)`
+  - `gx3d.sphere(x, y, z, radius, segments, r, g, b)`
   - `gx3d.cuboid(x, y, z, sx, sy, sz, r, g, b)`
   - `gx3d.cuboid_solid(x, y, z, sx, sy, sz, r, g, b)`
   - `gx3d.cube_sprite(x, y, z, size, sprite_id)`
