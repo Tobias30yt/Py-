@@ -86,7 +86,7 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gfx.anim_length(anim_id)`
   - `gfx.anim_draw(anim_id, tick, x, y)`
   - `gfx.anim_draw_scaled(anim_id, tick, x, y, w, h)`
-  - `gfx.shader_set(mode, p1, p2, p3)` (`1` grayscale, `2` scanline, `3` wave, `4` invert, `5` posterize, `6` rgb-split, `7` vignette)
+  - `gfx.shader_set(mode, p1, p2, p3)` (`1` grayscale, `2` scanline, `3` wave, `4` invert, `5` posterize, `6` rgb-split, `7` vignette, `8` edge, `9` pixelate)
   - `gfx.shader_clear()`
   - `gfx.shader_create()`
   - `gfx.shader_program_clear(program_id)`
@@ -96,13 +96,16 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gfx.text(x, y, "TEXT", r, g, b)`
   - `gfx.text_scaled(x, y, "TEXT", scale, r, g, b)`
   - `gfx.clear(r, g, b)`
+  - `gfx.frame()` (presented frame counter)
   - `gfx.pixel(x, y, r, g, b)`
   - `gfx.line(x1, y1, x2, y2, r, g, b)`
   - `gfx.line_thick(x1, y1, x2, y2, thickness, r, g, b)`
+  - `gfx.triangle(x1, y1, x2, y2, x3, y3, r, g, b)` (filled)
   - `gfx.rect(x, y, w, h, r, g, b)`
   - `gfx.gradient_rect(x, y, w, h, r1, g1, b1, r2, g2, b2, vertical)`
   - `gfx.rect_outline(x, y, w, h, r, g, b)`
   - `gfx.circle(x, y, radius, r, g, b)`
+  - `gfx.circle_outline(x, y, radius, thickness, r, g, b)`
   - `gfx.save("build/frame.ppm")`
   - `gfx.save_frame("build/pong", frame)`
   - `time.sleep_ms(ms)`

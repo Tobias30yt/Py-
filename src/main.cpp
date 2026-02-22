@@ -840,6 +840,67 @@ struct GraphicsState {
     }
   }
 
+  void CircleOutline(int cx, int cy, int radius, int thickness, int r, int g,
+                     int b) {
+    EnsureOpen("gfx.circle_outline");
+    if (radius <= 0 || thickness <= 0) {
+      return;
+    }
+    const int outer = radius;
+    const int inner = std::max(0, radius - thickness);
+    const int outer2 = outer * outer;
+    const int inner2 = inner * inner;
+    Pixel color{ClampColor(r), ClampColor(g), ClampColor(b)};
+    for (int y = -outer; y <= outer; ++y) {
+      for (int x = -outer; x <= outer; ++x) {
+        const int d = x * x + y * y;
+        if (d <= outer2 && d >= inner2) {
+          SetPixelRaw(cx + x, cy + y, color);
+        }
+      }
+    }
+  }
+
+  void Triangle2D(int x1, int y1, int x2, int y2, int x3, int y3, int r, int g,
+                  int b) {
+    EnsureOpen("gfx.triangle");
+    int min_x = std::min(x1, std::min(x2, x3));
+    int max_x = std::max(x1, std::max(x2, x3));
+    int min_y = std::min(y1, std::min(y2, y3));
+    int max_y = std::max(y1, std::max(y2, y3));
+
+    min_x = std::max(0, min_x);
+    min_y = std::max(0, min_y);
+    max_x = std::min(width - 1, max_x);
+    max_y = std::min(height - 1, max_y);
+    if (min_x > max_x || min_y > max_y) {
+      return;
+    }
+
+    const double denom =
+        static_cast<double>((y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3));
+    if (std::abs(denom) < 1e-9) {
+      return;
+    }
+    Pixel color{ClampColor(r), ClampColor(g), ClampColor(b)};
+    for (int y = min_y; y <= max_y; ++y) {
+      for (int x = min_x; x <= max_x; ++x) {
+        const double px = static_cast<double>(x) + 0.5;
+        const double py = static_cast<double>(y) + 0.5;
+        const double w1 =
+            ((y2 - y3) * (px - x3) + (x3 - x2) * (py - y3)) / denom;
+        const double w2 =
+            ((y3 - y1) * (px - x3) + (x1 - x3) * (py - y3)) / denom;
+        const double w3 = 1.0 - w1 - w2;
+        const bool inside_ccw = (w1 >= 0.0 && w2 >= 0.0 && w3 >= 0.0);
+        const bool inside_cw = (w1 <= 0.0 && w2 <= 0.0 && w3 <= 0.0);
+        if (inside_ccw || inside_cw) {
+          SetPixelRaw(x, y, color);
+        }
+      }
+    }
+  }
+
   void LineThick(int x1, int y1, int x2, int y2, int thickness, int r, int g,
                  int b) {
     EnsureOpen("gfx.line_thick");
@@ -920,6 +981,8 @@ struct GraphicsState {
     EnsureOpen("gfx.height");
     return height;
   }
+
+  int FrameCount() const { return present_frame; }
 
   void OpenWindow(int w, int h, const std::string& title) {
     Open(w, h);
@@ -1558,6 +1621,33 @@ struct GraphicsState {
       p.r = (p.r * (255 - dark)) / 255;
       p.g = (p.g * (255 - dark)) / 255;
       p.b = (p.b * (255 - dark)) / 255;
+    } else if (mode == 8) {
+      // Edge detect strength p1 in 0..255
+      const int s = std::max(0, std::min(255, p1));
+      const Pixel l = ReadPixelShaderSource(x - 1, y);
+      const Pixel rpx = ReadPixelShaderSource(x + 1, y);
+      const Pixel u = ReadPixelShaderSource(x, y - 1);
+      const Pixel d = ReadPixelShaderSource(x, y + 1);
+      const int dxr = std::abs(rpx.r - l.r);
+      const int dxg = std::abs(rpx.g - l.g);
+      const int dxb = std::abs(rpx.b - l.b);
+      const int dyr = std::abs(d.r - u.r);
+      const int dyg = std::abs(d.g - u.g);
+      const int dyb = std::abs(d.b - u.b);
+      const int er = std::min(255, dxr + dyr);
+      const int eg = std::min(255, dxg + dyg);
+      const int eb = std::min(255, dxb + dyb);
+      p.r = (p.r * (255 - s) + er * s) / 255;
+      p.g = (p.g * (255 - s) + eg * s) / 255;
+      p.b = (p.b * (255 - s) + eb * s) / 255;
+    } else if (mode == 9) {
+      // Pixelate: p1 block size in 1..64
+      int block = p1;
+      if (block < 1) block = 1;
+      if (block > 64) block = 64;
+      const int bx = (x / block) * block;
+      const int by = (y / block) * block;
+      p = ReadPixelShaderSource(bx, by);
     }
     p.r = ClampColor(p.r);
     p.g = ClampColor(p.g);
@@ -3837,6 +3927,27 @@ class VM {
       stack_.push_back(0);
       return;
     }
+    if (name == "gfx.circle_outline") {
+      ExpectArgc(name, argc, 7);
+      gfx_.CircleOutline(
+          ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+          ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+          ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+          ValueAsInt(args[6], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.triangle") {
+      ExpectArgc(name, argc, 9);
+      gfx_.Triangle2D(
+          ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+          ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+          ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+          ValueAsInt(args[6], name), ValueAsInt(args[7], name),
+          ValueAsInt(args[8], name));
+      stack_.push_back(0);
+      return;
+    }
     if (name == "gfx.width") {
       ExpectArgc(name, argc, 0);
       stack_.push_back(gfx_.Width());
@@ -3845,6 +3956,11 @@ class VM {
     if (name == "gfx.height") {
       ExpectArgc(name, argc, 0);
       stack_.push_back(gfx_.Height());
+      return;
+    }
+    if (name == "gfx.frame") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(gfx_.FrameCount());
       return;
     }
     if (name == "gfx.window") {

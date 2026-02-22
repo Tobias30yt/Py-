@@ -53,6 +53,14 @@ while gfx.closed() == 0:
     let mode = 8
     gfx.shader_use_program(custom_program)
   end
+  if gfx.key_down(48) == 1:
+    let mode = 9
+    gfx.shader_set(8, 220, 0, 0)
+  end
+  if gfx.key_down(189) == 1:
+    let mode = 10
+    gfx.shader_set(9, 6, 0, 0)
+  end
 
   gfx.clear(10, 14, 24)
   gfx.gradient_rect(0, 0, 960, 120, 16, 24, 40, 36, 46, 70, 1)
@@ -69,15 +77,19 @@ while gfx.closed() == 0:
   gfx.rect(430, 230, size, size, 120, 220, 150)
   gfx.rect_outline(430, 230, size, size, 220, 250, 230)
   gfx.line_thick(390, 210, 620, 350, 4, 120, 180, 255)
+  gfx.triangle(700, 300, 840, 420, 640, 430, 255, 150, 90)
+  gfx.circle_outline(800, 140, 40, 6, 180, 230, 255)
 
   gfx.text_scaled(20, 14, "SHADER DEMO", 2, 230, 240, 255)
   gfx.text(20, 36, "1 NONE 2 GRAY 3 SCAN 4 WAVE", 180, 220, 255)
   gfx.text(20, 48, "5 INVERT 6 POSTERIZE 7 RGBSPLIT 8 VIGNETTE", 180, 220, 255)
-  gfx.text(20, 60, "9 CUSTOM PROGRAM", 180, 220, 255)
+  gfx.text(20, 60, "9 CUSTOM 0 EDGE - PIXELATE", 180, 220, 255)
   gfx.text(20, 72, "MODE:", 220, 240, 255)
   gfx.text(58, 72, mode, 220, 255, 180)
   gfx.text(20, 84, "TICK:", 220, 240, 255)
   gfx.text(58, 84, t, 220, 255, 180)
+  gfx.text(20, 96, "FRAME:", 220, 240, 255)
+  gfx.text(64, 96, gfx.frame(), 220, 255, 180)
 
   gfx.present()
   let t = t + 1
