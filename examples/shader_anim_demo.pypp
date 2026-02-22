@@ -4,6 +4,12 @@ gfx.refresh_rate(60)
 
 let t = 0
 let mode = 0
+let custom_program = -1
+
+let custom_program = gfx.shader_create()
+gfx.shader_add(custom_program, 7, 140, 0, 0)
+gfx.shader_add(custom_program, 2, 70, 0, 0)
+gfx.shader_add(custom_program, 4, 280, 0, 0)
 
 while gfx.closed() == 0:
   gfx.poll()
@@ -43,6 +49,10 @@ while gfx.closed() == 0:
     let mode = 7
     gfx.shader_set(7, 150, 0, 0)
   end
+  if gfx.key_down(57) == 1:
+    let mode = 8
+    gfx.shader_use_program(custom_program)
+  end
 
   gfx.clear(10, 14, 24)
 
@@ -61,10 +71,11 @@ while gfx.closed() == 0:
   gfx.text(20, 20, "SHADER DEMO", 230, 240, 255)
   gfx.text(20, 36, "1 NONE 2 GRAY 3 SCAN 4 WAVE", 180, 220, 255)
   gfx.text(20, 48, "5 INVERT 6 POSTERIZE 7 RGBSPLIT 8 VIGNETTE", 180, 220, 255)
-  gfx.text(20, 64, "MODE:", 220, 240, 255)
-  gfx.text(58, 64, mode, 220, 255, 180)
-  gfx.text(20, 76, "TICK:", 220, 240, 255)
-  gfx.text(58, 76, t, 220, 255, 180)
+  gfx.text(20, 60, "9 CUSTOM PROGRAM", 180, 220, 255)
+  gfx.text(20, 72, "MODE:", 220, 240, 255)
+  gfx.text(58, 72, mode, 220, 255, 180)
+  gfx.text(20, 84, "TICK:", 220, 240, 255)
+  gfx.text(58, 84, t, 220, 255, 180)
 
   gfx.present()
   let t = t + 1

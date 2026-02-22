@@ -686,6 +686,16 @@ struct GraphicsState {
     int playback_mode = 1;  // 0=once, 1=loop, 2=ping-pong
   };
   std::vector<AnimClip> anims;
+  struct ShaderOp {
+    int mode = 0;
+    int p1 = 0;
+    int p2 = 0;
+    int p3 = 0;
+  };
+  struct ShaderProgram {
+    std::vector<ShaderOp> ops;
+  };
+  std::vector<ShaderProgram> shader_programs;
 #ifdef _WIN32
   HWND hwnd = nullptr;
   bool window_open = false;
@@ -711,6 +721,7 @@ struct GraphicsState {
   int shader_p1 = 0;
   int shader_p2 = 0;
   int shader_p3 = 0;
+  int shader_program_active = -1;
   int present_frame = 0;
   int refresh_rate_hz = 0;
   std::chrono::steady_clock::time_point next_frame_time{};
@@ -730,6 +741,7 @@ struct GraphicsState {
     shader_p1 = 0;
     shader_p2 = 0;
     shader_p3 = 0;
+    shader_program_active = -1;
   }
 
   void Clear(int r, int g, int b) {
@@ -1125,6 +1137,7 @@ struct GraphicsState {
     shader_p1 = p1;
     shader_p2 = p2;
     shader_p3 = p3;
+    shader_program_active = -1;
   }
 
   void ShaderClear() {
@@ -1132,6 +1145,55 @@ struct GraphicsState {
     shader_p1 = 0;
     shader_p2 = 0;
     shader_p3 = 0;
+    shader_program_active = -1;
+  }
+
+  int ShaderCreate() {
+    ShaderProgram program;
+    shader_programs.push_back(std::move(program));
+    return static_cast<int>(shader_programs.size() - 1);
+  }
+
+  void ShaderProgramClear(int program_id) {
+    if (program_id < 0 ||
+        static_cast<std::size_t>(program_id) >= shader_programs.size()) {
+      throw std::runtime_error("gfx.shader_program_clear invalid program id");
+    }
+    shader_programs[static_cast<std::size_t>(program_id)].ops.clear();
+  }
+
+  void ShaderAdd(int program_id, int mode, int p1, int p2, int p3) {
+    if (program_id < 0 ||
+        static_cast<std::size_t>(program_id) >= shader_programs.size()) {
+      throw std::runtime_error("gfx.shader_add invalid program id");
+    }
+    if (mode <= 0) {
+      throw std::runtime_error("gfx.shader_add expects mode > 0");
+    }
+    ShaderOp op;
+    op.mode = mode;
+    op.p1 = p1;
+    op.p2 = p2;
+    op.p3 = p3;
+    shader_programs[static_cast<std::size_t>(program_id)].ops.push_back(op);
+  }
+
+  int ShaderProgramLen(int program_id) const {
+    if (program_id < 0 ||
+        static_cast<std::size_t>(program_id) >= shader_programs.size()) {
+      throw std::runtime_error("gfx.shader_program_len invalid program id");
+    }
+    return static_cast<int>(
+        shader_programs[static_cast<std::size_t>(program_id)].ops.size());
+  }
+
+  void ShaderUseProgram(int program_id) {
+    if (program_id < 0 ||
+        static_cast<std::size_t>(program_id) >= shader_programs.size()) {
+      throw std::runtime_error("gfx.shader_use_program invalid program id");
+    }
+    shader_program_active = program_id;
+    shader_mode = 0;
   }
 
   int AnimRegister(int first_sprite, int frame_count, int frame_ticks,
@@ -1373,82 +1435,94 @@ struct GraphicsState {
     return pixels[static_cast<std::size_t>(y * width + x)];
   }
 
-  void BuildPresentBuffer() {
+  Pixel ApplyShaderOp(int mode, int p1, int p2, int p3, int x, int y,
+                      Pixel p) const {
     const double pi = 3.14159265358979323846;
-    const int mix = std::max(0, std::min(1000, shader_p1));
+    const int mix = std::max(0, std::min(1000, p1));
+    if (mode == 1) {
+      int lum = (p.r * 30 + p.g * 59 + p.b * 11) / 100;
+      p.r = (p.r * (1000 - mix) + lum * mix) / 1000;
+      p.g = (p.g * (1000 - mix) + lum * mix) / 1000;
+      p.b = (p.b * (1000 - mix) + lum * mix) / 1000;
+    } else if (mode == 2) {
+      const int dark = std::max(0, std::min(255, p1));
+      if (((y + present_frame) & 1) != 0) {
+        p.r = (p.r * (255 - dark)) / 255;
+        p.g = (p.g * (255 - dark)) / 255;
+        p.b = (p.b * (255 - dark)) / 255;
+      }
+    } else if (mode == 3) {
+      const int amp = std::max(0, std::min(64, p1));
+      const double freq = std::max(1, p2) / 1000.0;
+      const double speed = static_cast<double>(p3);
+      const double phase = (static_cast<double>(y) * freq) +
+                           (static_cast<double>(present_frame) * speed / 60.0);
+      const int offset = static_cast<int>(
+          std::round(std::sin(phase * pi) * static_cast<double>(amp)));
+      p = ReadPixelShaderSource(x + offset, y);
+    } else if (mode == 4) {
+      const int inv_r = 255 - p.r;
+      const int inv_g = 255 - p.g;
+      const int inv_b = 255 - p.b;
+      p.r = (p.r * (1000 - mix) + inv_r * mix) / 1000;
+      p.g = (p.g * (1000 - mix) + inv_g * mix) / 1000;
+      p.b = (p.b * (1000 - mix) + inv_b * mix) / 1000;
+    } else if (mode == 5) {
+      int levels = p1;
+      if (levels < 2) levels = 2;
+      if (levels > 64) levels = 64;
+      const int step = std::max(1, 255 / (levels - 1));
+      p.r = ((p.r + step / 2) / step) * step;
+      p.g = ((p.g + step / 2) / step) * step;
+      p.b = ((p.b + step / 2) / step) * step;
+    } else if (mode == 6) {
+      const int off = std::max(0, std::min(24, p1));
+      const Pixel pr = ReadPixelShaderSource(x - off, y);
+      const Pixel pg = ReadPixelShaderSource(x, y);
+      const Pixel pb = ReadPixelShaderSource(x + off, y);
+      p.r = pr.r;
+      p.g = pg.g;
+      p.b = pb.b;
+    } else if (mode == 7) {
+      const int strength = std::max(0, std::min(255, p1));
+      const double cx = static_cast<double>(width) * 0.5;
+      const double cy = static_cast<double>(height) * 0.5;
+      const double nx = (static_cast<double>(x) - cx) / cx;
+      const double ny = (static_cast<double>(y) - cy) / cy;
+      double d = std::sqrt(nx * nx + ny * ny);
+      if (d > 1.0) d = 1.0;
+      const int dark = static_cast<int>(std::round(d * strength));
+      p.r = (p.r * (255 - dark)) / 255;
+      p.g = (p.g * (255 - dark)) / 255;
+      p.b = (p.b * (255 - dark)) / 255;
+    }
+    p.r = ClampColor(p.r);
+    p.g = ClampColor(p.g);
+    p.b = ClampColor(p.b);
+    return p;
+  }
+
+  void BuildPresentBuffer() {
+    const bool has_program =
+        (shader_program_active >= 0 &&
+         static_cast<std::size_t>(shader_program_active) < shader_programs.size() &&
+         !shader_programs[static_cast<std::size_t>(shader_program_active)]
+              .ops.empty());
+    const std::vector<ShaderOp>* ops =
+        has_program ? &shader_programs[static_cast<std::size_t>(shader_program_active)].ops
+                    : nullptr;
+
     for (int y = 0; y < height; ++y) {
       for (int x = 0; x < width; ++x) {
         Pixel p = ReadPixelShaderSource(x, y);
-
-        if (shader_mode == 1) {
-          // Grayscale mix: p1 in 0..1000
-          int lum = (p.r * 30 + p.g * 59 + p.b * 11) / 100;
-          p.r = (p.r * (1000 - mix) + lum * mix) / 1000;
-          p.g = (p.g * (1000 - mix) + lum * mix) / 1000;
-          p.b = (p.b * (1000 - mix) + lum * mix) / 1000;
-        } else if (shader_mode == 2) {
-          // Scanline darkening: p1 in 0..255
-          const int dark = std::max(0, std::min(255, shader_p1));
-          if (((y + present_frame) & 1) != 0) {
-            p.r = (p.r * (255 - dark)) / 255;
-            p.g = (p.g * (255 - dark)) / 255;
-            p.b = (p.b * (255 - dark)) / 255;
+        if (ops != nullptr) {
+          for (const ShaderOp& op : *ops) {
+            p = ApplyShaderOp(op.mode, op.p1, op.p2, op.p3, x, y, p);
           }
-        } else if (shader_mode == 3) {
-          // Wave distortion: p1 amplitude px, p2 frequency x1000, p3 speed
-          const int amp = std::max(0, std::min(64, shader_p1));
-          const double freq = std::max(1, shader_p2) / 1000.0;
-          const double speed = static_cast<double>(shader_p3);
-          const double phase = (static_cast<double>(y) * freq) +
-                               (static_cast<double>(present_frame) * speed /
-                                60.0);
-          const int offset = static_cast<int>(std::round(std::sin(phase * pi) *
-                                                         static_cast<double>(amp)));
-          p = ReadPixelShaderSource(x + offset, y);
-        } else if (shader_mode == 4) {
-          // Invert mix: p1 in 0..1000
-          const int inv_r = 255 - p.r;
-          const int inv_g = 255 - p.g;
-          const int inv_b = 255 - p.b;
-          p.r = (p.r * (1000 - mix) + inv_r * mix) / 1000;
-          p.g = (p.g * (1000 - mix) + inv_g * mix) / 1000;
-          p.b = (p.b * (1000 - mix) + inv_b * mix) / 1000;
-        } else if (shader_mode == 5) {
-          // Posterize: p1 levels in 2..64
-          int levels = shader_p1;
-          if (levels < 2) levels = 2;
-          if (levels > 64) levels = 64;
-          const int step = std::max(1, 255 / (levels - 1));
-          p.r = ((p.r + step / 2) / step) * step;
-          p.g = ((p.g + step / 2) / step) * step;
-          p.b = ((p.b + step / 2) / step) * step;
-        } else if (shader_mode == 6) {
-          // RGB split: p1 = x offset in pixels
-          const int off = std::max(0, std::min(24, shader_p1));
-          const Pixel pr = ReadPixelShaderSource(x - off, y);
-          const Pixel pg = ReadPixelShaderSource(x, y);
-          const Pixel pb = ReadPixelShaderSource(x + off, y);
-          p.r = pr.r;
-          p.g = pg.g;
-          p.b = pb.b;
-        } else if (shader_mode == 7) {
-          // Vignette: p1 strength in 0..255
-          const int strength = std::max(0, std::min(255, shader_p1));
-          const double cx = static_cast<double>(width) * 0.5;
-          const double cy = static_cast<double>(height) * 0.5;
-          const double nx = (static_cast<double>(x) - cx) / cx;
-          const double ny = (static_cast<double>(y) - cy) / cy;
-          double d = std::sqrt(nx * nx + ny * ny);
-          if (d > 1.0) d = 1.0;
-          const int dark = static_cast<int>(std::round(d * strength));
-          p.r = (p.r * (255 - dark)) / 255;
-          p.g = (p.g * (255 - dark)) / 255;
-          p.b = (p.b * (255 - dark)) / 255;
+        } else if (shader_mode != 0) {
+          p = ApplyShaderOp(shader_mode, shader_p1, shader_p2, shader_p3, x, y,
+                            p);
         }
-
-        p.r = ClampColor(p.r);
-        p.g = ClampColor(p.g);
-        p.b = ClampColor(p.b);
         std::uint32_t value = (static_cast<std::uint32_t>(p.b) << 16) |
                               (static_cast<std::uint32_t>(p.g) << 8) |
                               static_cast<std::uint32_t>(p.r);
@@ -3819,6 +3893,36 @@ class VM {
     if (name == "gfx.shader_clear") {
       ExpectArgc(name, argc, 0);
       gfx_.ShaderClear();
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.shader_create") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(gfx_.ShaderCreate());
+      return;
+    }
+    if (name == "gfx.shader_program_clear") {
+      ExpectArgc(name, argc, 1);
+      gfx_.ShaderProgramClear(ValueAsInt(args[0], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.shader_add") {
+      ExpectArgc(name, argc, 5);
+      gfx_.ShaderAdd(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                     ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+                     ValueAsInt(args[4], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.shader_program_len") {
+      ExpectArgc(name, argc, 1);
+      stack_.push_back(gfx_.ShaderProgramLen(ValueAsInt(args[0], name)));
+      return;
+    }
+    if (name == "gfx.shader_use_program") {
+      ExpectArgc(name, argc, 1);
+      gfx_.ShaderUseProgram(ValueAsInt(args[0], name));
       stack_.push_back(0);
       return;
     }

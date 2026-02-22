@@ -88,6 +88,11 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gfx.anim_draw_scaled(anim_id, tick, x, y, w, h)`
   - `gfx.shader_set(mode, p1, p2, p3)` (`1` grayscale, `2` scanline, `3` wave, `4` invert, `5` posterize, `6` rgb-split, `7` vignette)
   - `gfx.shader_clear()`
+  - `gfx.shader_create()`
+  - `gfx.shader_program_clear(program_id)`
+  - `gfx.shader_add(program_id, mode, p1, p2, p3)`
+  - `gfx.shader_program_len(program_id)`
+  - `gfx.shader_use_program(program_id)`
   - `gfx.text(x, y, "TEXT", r, g, b)`
   - `gfx.clear(r, g, b)`
   - `gfx.pixel(x, y, r, g, b)`
