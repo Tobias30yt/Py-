@@ -1,3 +1,4 @@
+# title_image: assets/pypp_title.ppm
 # Put an image at assets/player.png or adjust the path below.
 let spr = gfx.load_sprite("assets/player.png")
 

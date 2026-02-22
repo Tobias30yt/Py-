@@ -1,3 +1,4 @@
+# title_image: assets/pypp_title.ppm
 # Headless Pong demo: renders 120 frames to build/pong_XXXX.ppm
 
 let w = 320

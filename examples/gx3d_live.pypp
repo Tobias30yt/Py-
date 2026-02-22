@@ -1,3 +1,4 @@
+# title_image: assets/pypp_title.ppm
 gfx.window(800, 480, "pypp gx3d live")
 gx3d.reset()
 gx3d.camera(0, 0, -320)

@@ -1,3 +1,4 @@
+# title_image: assets/pypp_title.ppm
 # pong frame renderer for current pypp gfx API
 
 let w = 320

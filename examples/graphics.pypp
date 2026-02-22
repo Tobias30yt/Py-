@@ -1,3 +1,4 @@
+# title_image: assets/pypp_title.ppm
 gfx.open(64, 64)
 gfx.clear(15, 20, 30)
 gfx.pixel(5, 5, 255, 30, 30)

@@ -1,3 +1,4 @@
+# title_image: assets/pypp_title.ppm
 let x = 21
 let y = 2
 print("hello from py++", x * y)

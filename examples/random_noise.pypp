@@ -1,3 +1,4 @@
+# title_image: assets/pypp_title.ppm
 random.seed(42)
 noise.seed(1337)
 

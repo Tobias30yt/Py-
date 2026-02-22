@@ -1,3 +1,4 @@
+# title_image: assets/pypp_title.ppm
 gfx.window_ratio(960, 540, 16, 9, "py++ menu demo")
 gfx.keep_aspect(1)
 gfx.mouse_show(1)

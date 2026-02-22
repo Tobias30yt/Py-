@@ -1,3 +1,4 @@
+# title_image: assets/pypp_title.ppm
 import objects as o
 
 print("player:", o.player.name, o.player.hp, o.player.speed)
