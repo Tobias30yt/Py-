@@ -226,20 +226,20 @@ Recommended render order:
 ### Run live demo
 
 ```powershell
-.\build\Release\pypp.exe run examples\pong_live.pypp
+.\build\Release\pypp.exe run examples\graphics.pypp
 ```
 
 ### Run 3D demo
 
 ```powershell
-.\build\Release\pypp.exe run examples\gx3d_live.pypp
+.\build\Release\pypp.exe run examples\gx3d_test.pypp
 ```
 
 ### Build game executable
 
 ```powershell
-.\build\Release\pypp.exe compile-exe examples\pong_live.pypp --out pong.exe
-.\pong.exe
+.\build\Release\pypp.exe compile-exe examples\gx3d_test.pypp --out gx3d_test.exe
+.\gx3d_test.exe
 ```
 
 Back: [[3D-Graphics]]  

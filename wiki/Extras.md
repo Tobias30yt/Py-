@@ -22,8 +22,8 @@ Common keys for `gfx.key_down(...)`:
 Build and package script as executable:
 
 ```powershell
-.\build\Release\pypp.exe compile-exe examples\pong_live.pypp --out pong.exe
-.\pong.exe
+.\build\Release\pypp.exe compile-exe examples\gx3d_test.pypp --out gx3d_test.exe
+.\gx3d_test.exe
 ```
 
 ## GitHub Release Automation

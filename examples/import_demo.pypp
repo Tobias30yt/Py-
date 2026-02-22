@@ -1,4 +1,0 @@
-# title_image: assets/pypp_title.ppm
-import config as c
-print("config:", c.width, c.height, c.title)
-

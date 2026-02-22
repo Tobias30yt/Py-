@@ -102,10 +102,8 @@ end
 ## Example Files
 
 - `examples/graphics.pypp`
-- `examples/pong_live.pypp`
-- `examples/pong_game.pypp` (frame export style)
-- `examples/sprite_demo.pypp`
-- `examples/menu_demo.pypp`
+- `examples/gx3d_frame.pypp`
+- `examples/gx3d_test.pypp`
 
 Back: [[Home]]  
 Next: [[3D-Graphics]]  

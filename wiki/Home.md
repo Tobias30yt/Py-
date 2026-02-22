@@ -42,16 +42,16 @@ cmake --build build --config Release
 
 ```powershell
 .\build\Release\pypp.exe run examples\hello.pypp
-.\build\Release\pypp.exe run examples\pong_live.pypp
-.\build\Release\pypp.exe run examples\gx3d_live.pypp
-.\build\Release\pypp.exe run examples\import_objects_demo.pypp
+.\build\Release\pypp.exe run examples\graphics.pypp
+.\build\Release\pypp.exe run examples\gx3d_test.pypp
+.\build\Release\pypp.exe run examples\math_numpy_demo.pypp
 ```
 
 ### 3. Build standalone executable
 
 ```powershell
-.\build\Release\pypp.exe compile-exe examples\pong_live.pypp --out pong.exe
-.\pong.exe
+.\build\Release\pypp.exe compile-exe examples\gx3d_test.pypp --out gx3d_test.exe
+.\gx3d_test.exe
 ```
 
 ## Recommended Reading Order

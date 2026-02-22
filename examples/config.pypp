@@ -1,5 +1,0 @@
-# title_image: assets/pypp_title.ppm
-let width = 800
-let height = 450
-let title = "pypp game"
-

@@ -145,19 +145,13 @@ Hinweis:
 .\build\pypp.exe compile examples\hello.pypp
 .\build\pypp.exe build examples\hello.pypp
 .\build\pypp.exe run-bytecode build\hello.ppbc
-.\build\pypp.exe compile-exe examples\pong_live.pypp --out pong.exe
-.\build\pypp.exe run examples\control_flow.pypp
 .\build\pypp.exe run examples\graphics.pypp
-.\build\pypp.exe run examples\pong_game.pypp
-.\build\pypp.exe run examples\pong_live.pypp
-.\build\pypp.exe run examples\menu_demo.pypp
 .\build\pypp.exe run examples\gx3d_frame.pypp
-.\build\pypp.exe run examples\gx3d_live.pypp
+.\build\pypp.exe run examples\gx3d_test.pypp
 .\build\pypp.exe run examples\multiplayer_test.pypp
 .\build\pypp.exe run examples\random_noise.pypp
 .\build\pypp.exe run examples\torch_demo.pypp
 .\build\pypp.exe run examples\math_numpy_demo.pypp
-.\build\pypp.exe run examples\import_objects_demo.pypp
 .\build\pypp.exe run projects\mini_minecraft\main.pypp
 ```
 
