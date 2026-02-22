@@ -1,0 +1,6 @@
+PYPPBC1
+PUSH_STR|hello from bytecode
+CALL|print|1
+POP
+HALT
+

@@ -1,0 +1,31 @@
+program       = { newline | comment } [ statement { separator statement } ] { newline | comment } ;
+statement     = let_stmt | if_stmt | while_stmt | expr_stmt ;
+let_stmt      = "let" ident "=" expression ;
+if_stmt       = "if" expression ":" newline block "end" ;
+while_stmt    = "while" expression ":" newline block "end" ;
+block         = { newline | comment } [ statement { separator statement } ] { newline | comment } ;
+expr_stmt     = expression ;
+separator     = { comment } newline { newline | comment } ;
+
+expression    = comparison ;
+comparison    = term { ("==" | "!=" | "<" | "<=" | ">" | ">=") term } ;
+term          = unary { ("*" | "/") unary } ;
+unary         = [ "-" ] primary ;
+primary       = int_lit | string_lit | variable | call | "(" expression ")" ;
+
+variable      = ident ;
+call          = callee "(" [ expression { "," expression } ] ")" ;
+callee        = ident { "." ident } ;
+
+# Built-ins (documented subset of valid calls)
+print_call    = "print" "(" [ expression { "," expression } ] ")" ;
+gfx_open      = "gfx.open" "(" expression "," expression ")" ;
+gfx_clear     = "gfx.clear" "(" expression "," expression "," expression ")" ;
+gfx_pixel     = "gfx.pixel" "(" expression "," expression "," expression "," expression "," expression ")" ;
+gfx_save      = "gfx.save" "(" string_lit ")" ;
+
+ident         = letter { letter | digit | "_" } ;
+int_lit       = digit { digit } ;
+string_lit    = '"' { any_char - '"' } '"' ;
+comment       = "#" { any_char - newline } ;
+newline       = "\n" ;

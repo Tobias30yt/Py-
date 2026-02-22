@@ -1,0 +1,9 @@
+gfx.open(64, 64)
+gfx.clear(15, 20, 30)
+gfx.pixel(5, 5, 255, 30, 30)
+gfx.pixel(6, 6, 255, 30, 30)
+gfx.pixel(7, 7, 255, 30, 30)
+gfx.pixel(20, 40, 30, 200, 255)
+gfx.save("build/frame.ppm")
+print("saved build/frame.ppm")
+
