@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Windows setup helper for C++ toolchain used by this project.
+Setup helper for C++ toolchain used by this project.
 
 Usage:
   python tools/setup_cpp_env.py --check
@@ -27,10 +27,32 @@ class ToolStatus:
 
 def find_tool(name: str) -> ToolStatus:
     path = shutil.which(name)
-    if path is None and name == "cmake":
+    if path is None and name == "cmake" and os.name == "nt":
         fallback = pathlib.Path(r"C:\Program Files\CMake\bin\cmake.exe")
         if fallback.exists():
             path = str(fallback)
+    if path is None and name == "cl" and os.name == "nt":
+        # cl.exe is often not in PATH unless Developer Command Prompt is used.
+        roots = [
+            pathlib.Path(r"C:\Program Files\Microsoft Visual Studio\2022"),
+            pathlib.Path(r"C:\Program Files (x86)\Microsoft Visual Studio\2022"),
+        ]
+        patterns = [
+            "BuildTools/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe",
+            "Community/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe",
+            "Professional/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe",
+            "Enterprise/VC/Tools/MSVC/*/bin/Hostx64/x64/cl.exe",
+        ]
+        for root in roots:
+            if not root.exists():
+                continue
+            for pat in patterns:
+                found = sorted(root.glob(pat))
+                if found:
+                    path = str(found[-1])
+                    break
+            if path is not None:
+                break
     return ToolStatus(name=name, found=path is not None, path=path)
 
 
@@ -51,13 +73,22 @@ def print_status(tools: list[ToolStatus]) -> None:
 
 
 def check_environment() -> int:
-    tools = [
-        find_tool("winget"),
-        find_tool("cmake"),
-        find_tool("cl"),
-        find_tool("g++"),
-        find_tool("clang++"),
-    ]
+    if os.name == "nt":
+        tools = [
+            find_tool("winget"),
+            find_tool("cmake"),
+            find_tool("cl"),
+            find_tool("g++"),
+            find_tool("clang++"),
+        ]
+    else:
+        tools = [
+            find_tool("cmake"),
+            find_tool("g++"),
+            find_tool("clang++"),
+            find_tool("make"),
+            find_tool("ninja"),
+        ]
     print_status(tools)
 
     has_compiler = any(t.found for t in tools if t.name in {"cl", "g++", "clang++"})
@@ -72,7 +103,16 @@ def check_environment() -> int:
         print("- Missing: cmake")
     if not has_compiler:
         print("- Missing: C++ compiler (cl, g++, or clang++)")
-    print("\nRun with --install to install required tools automatically (Windows + winget).")
+    if os.name == "nt":
+        print(
+            "\nRun with --install to install required tools automatically "
+            "(Windows + winget)."
+        )
+    else:
+        print(
+            "\nRun with --install to install required tools automatically "
+            "(Linux package manager)."
+        )
     return 1
 
 
@@ -128,6 +168,74 @@ def install_with_winget() -> None:
     )
 
 
+def linux_install_cmd() -> list[str]:
+    sudo = ["sudo"] if shutil.which("sudo") else []
+    if shutil.which("apt-get"):
+        return sudo + ["apt-get", "update", "&&"] + sudo + [
+            "apt-get",
+            "install",
+            "-y",
+            "cmake",
+            "build-essential",
+            "clang",
+            "ninja-build",
+        ]
+    if shutil.which("dnf"):
+        return sudo + [
+            "dnf",
+            "install",
+            "-y",
+            "cmake",
+            "gcc-c++",
+            "make",
+            "clang",
+            "ninja-build",
+        ]
+    if shutil.which("pacman"):
+        return sudo + [
+            "pacman",
+            "-S",
+            "--noconfirm",
+            "cmake",
+            "gcc",
+            "make",
+            "clang",
+            "ninja",
+        ]
+    if shutil.which("zypper"):
+        return sudo + [
+            "zypper",
+            "--non-interactive",
+            "install",
+            "cmake",
+            "gcc-c++",
+            "make",
+            "clang",
+            "ninja",
+        ]
+    raise RuntimeError(
+        "No supported Linux package manager found (apt-get, dnf, pacman, zypper)."
+    )
+
+
+def install_on_linux() -> None:
+    cmd = linux_install_cmd()
+    # We use shell form for apt update && install.
+    if "&&" in cmd:
+        command = " ".join(cmd)
+        print("> " + command)
+        proc = subprocess.run(command, shell=True, check=False)
+        if proc.returncode != 0:
+            raise RuntimeError(f"Command failed ({proc.returncode}): {command}")
+    else:
+        run_command(cmd)
+    print(
+        "\nInstall commands finished.\n"
+        "Open a NEW terminal and run:\n"
+        "  python tools/setup_cpp_env.py --check"
+    )
+
+
 def repair_existing_visual_studio() -> None:
     installer = pathlib.Path(
         r"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe"
@@ -176,7 +284,7 @@ def main() -> int:
     parser.add_argument(
         "--install",
         action="store_true",
-        help="Install CMake + Visual Studio C++ Build Tools via winget.",
+        help="Install required toolchain (Windows: winget, Linux: package manager).",
     )
     args = parser.parse_args()
 
@@ -188,7 +296,10 @@ def main() -> int:
         if args.check:
             return check_environment()
         if args.install:
-            install_with_winget()
+            if os.name == "nt":
+                install_with_winget()
+            else:
+                install_on_linux()
             return 0
     except Exception as exc:  # pragma: no cover
         print(f"ERROR: {exc}")

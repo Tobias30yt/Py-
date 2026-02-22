@@ -1,4 +1,4 @@
-name: Release Windows EXE
+name: Release
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  build-windows:
     runs-on: windows-latest
 
     steps:
@@ -30,11 +30,57 @@ jobs:
           Copy-Item build\Release\pypp.exe dist\pypp.exe
           Compress-Archive -Path dist\pypp.exe -DestinationPath dist\pypp-windows-x64.zip -Force
 
+      - name: Upload Artifact (Windows)
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: |
+            dist/pypp.exe
+            dist/pypp-windows-x64.zip
+
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build -j
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp build/pypp dist/pypp-linux
+          tar -czf dist/pypp-linux-x64.tar.gz -C dist pypp-linux
+
+      - name: Upload Artifact (Linux)
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-linux
+          path: |
+            dist/pypp-linux
+            dist/pypp-linux-x64.tar.gz
+
+  publish-release:
+    needs: [build-windows, build-linux]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
       - name: Publish Release Assets
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/pypp.exe
-            dist/pypp-windows-x64.zip
+            dist/release-windows/pypp.exe
+            dist/release-windows/pypp-windows-x64.zip
+            dist/release-linux/pypp-linux
+            dist/release-linux/pypp-linux-x64.tar.gz
           generate_release_notes: true
-

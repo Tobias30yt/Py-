@@ -146,6 +146,8 @@ Hinweis:
   der vorhandenen Visual-Studio-Installation mit dem C++-Workload.
 - Live window rendering (`gfx.window`, input polling) is currently Windows-only.
   Offscreen rendering, VM, math/numpy, noise/random, torch, and UDP networking run on Linux too.
+- On Linux, `tools/setup_cpp_env.py --install` uses your package manager
+  (`apt-get`, `dnf`, `pacman`, or `zypper`) to install compiler + cmake.
 
 ## Nutzung
 
@@ -207,11 +209,13 @@ ctest --test-dir build --output-on-failure
 ## Upload EXE to GitHub Releases (Automated)
 
 This repo includes `.github/workflows/release.yml`.
-When you push a tag like `v0.4.0`, GitHub Actions will:
+When you push a tag like `v0.6.3`, GitHub Actions will:
 
 - build `pypp.exe` on Windows
+- build `pypp` on Linux
 - create `pypp-windows-x64.zip`
-- upload both files to a GitHub Release
+- create `pypp-linux-x64.tar.gz`
+- upload all files to a GitHub Release
 
 Commands:
 
