@@ -16,6 +16,7 @@ Current focus areas:
 - [[Graphics]]: full 2D graphics API and live game loop patterns
 - [[3D-Graphics]]: `gx3d` camera, projection, rotation, cube rendering
 - [[Random-Noise]]: standard random + procedural noise utilities
+- [[Math-Library]]: list + numpy-style helpers (`math` / `numpy`)
 - [[AI-Library]]: torch-style AI helpers (fixed-point/int)
 - [[Extras]]: keycodes, release workflow, troubleshooting, roadmap
 
@@ -59,5 +60,6 @@ cmake --build build --config Release
 2. [[Graphics]]
 3. [[3D-Graphics]]
 4. [[Random-Noise]]
-5. [[AI-Library]]
-6. [[Extras]]
+5. [[Math-Library]]
+6. [[AI-Library]]
+7. [[Extras]]

@@ -54,6 +54,6 @@ while i < 50:
 end
 ```
 
-Back: [[Random-Noise]]  
+Back: [[Math-Library]]  
 Next: [[Extras]]  
 Home: [[Home]]

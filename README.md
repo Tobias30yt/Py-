@@ -50,6 +50,17 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `torch.mse(pred, target)`
   - `torch.lerp(a, b, t_ppm)`
   - `torch.step(param, grad, lr_ppm)`
+- Built-in Math-Library (`math`, alias `numpy`, list-based):
+  - `math.array(...)` / `numpy.array(...)`
+  - `math.len(a)`, `math.get(a, i)`, `math.set(a, i, v)`
+  - `math.push(a, v)`, `math.pop(a)`
+  - `math.zeros(n)`, `math.ones(n)`
+  - `math.arange(stop)` / `math.arange(start, stop[, step])`
+  - `math.linspace(start, stop, count)`
+  - `math.sum(a)`, `math.mean(a)`, `math.min(a)`, `math.max(a)`
+  - `math.dot(a, b)`
+  - elementwise: `math.add/sub/mul/div(a, b)` (list-list or list-scalar)
+  - `math.clip(a, lo, hi)`, `math.abs(x_or_list)`
 - Built-in Graphics-Library:
   - `gfx.open(w, h)`
   - `gfx.window(w, h, "title")` (live window)
@@ -145,6 +156,7 @@ Hinweis:
 .\build\pypp.exe run examples\multiplayer_test.pypp
 .\build\pypp.exe run examples\random_noise.pypp
 .\build\pypp.exe run examples\torch_demo.pypp
+.\build\pypp.exe run examples\math_numpy_demo.pypp
 .\build\pypp.exe run examples\import_objects_demo.pypp
 .\build\pypp.exe run projects\mini_minecraft\main.pypp
 ```

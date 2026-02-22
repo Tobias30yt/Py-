@@ -82,6 +82,18 @@ Prints runtime/compiler version.
 - `noise.smooth2(x, y, scale)`
 - `noise.fractal2(x, y, scale, octaves, persistence_pct)`
 
+### `math` / `numpy` list + numeric utilities
+
+- `math.array(...)` / `numpy.array(...)`
+- `math.len(a)`, `math.get(a, i)`, `math.set(a, i, v)`
+- `math.push(a, v)`, `math.pop(a)`
+- `math.zeros(n)`, `math.ones(n)`
+- `math.arange(...)`, `math.linspace(start, stop, count)`
+- `math.sum(a)`, `math.mean(a)`, `math.min(a)`, `math.max(a)`
+- `math.dot(a, b)`
+- `math.add/sub/mul/div(a, b)`
+- `math.clip(a, lo, hi)`, `math.abs(x_or_list)`
+
 ### `net` multiplayer utilities (UDP, Windows)
 
 - `net.host(port)`
@@ -177,6 +189,7 @@ Notes:
 - [[Graphics]] for 2D and live loop
 - [[3D-Graphics]] for wireframe projection and cubes
 - [[Random-Noise]] for procedural utilities
+- [[Math-Library]] for list/numpy-style helpers
 - [[AI-Library]] for torch-style helpers
 
 ## 3D Quick Reference

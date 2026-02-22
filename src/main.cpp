@@ -583,11 +583,17 @@ class Parser {
 };
 
 struct Object;
+struct List;
 using ObjectPtr = std::shared_ptr<Object>;
-using Value = std::variant<int, std::string, ObjectPtr>;
+using ListPtr = std::shared_ptr<List>;
+using Value = std::variant<int, std::string, ObjectPtr, ListPtr>;
 
 struct Object {
   std::unordered_map<std::string, Value> fields;
+};
+
+struct List {
+  std::vector<Value> items;
 };
 
 std::string ValueToString(const Value& value) {
@@ -596,6 +602,22 @@ std::string ValueToString(const Value& value) {
   }
   if (std::holds_alternative<std::string>(value)) {
     return std::get<std::string>(value);
+  }
+  if (std::holds_alternative<ListPtr>(value)) {
+    ListPtr list = std::get<ListPtr>(value);
+    if (!list) {
+      return "[]";
+    }
+    std::ostringstream out;
+    out << "[";
+    for (std::size_t i = 0; i < list->items.size(); ++i) {
+      if (i > 0) {
+        out << ", ";
+      }
+      out << ValueToString(list->items[i]);
+    }
+    out << "]";
+    return out.str();
   }
   return "<object>";
 }
@@ -613,6 +635,10 @@ bool ValueIsTruthy(const Value& value) {
   }
   if (std::holds_alternative<std::string>(value)) {
     return !std::get<std::string>(value).empty();
+  }
+  if (std::holds_alternative<ListPtr>(value)) {
+    ListPtr list = std::get<ListPtr>(value);
+    return list && !list->items.empty();
   }
   return std::get<ObjectPtr>(value) != nullptr;
 }
@@ -2515,6 +2541,250 @@ class VM {
       stack_.push_back(static_cast<int>(static_cast<long long>(param) - delta));
       return;
     }
+    if (name == "math.array" || name == "numpy.array") {
+      stack_.push_back(MakeListFromArgs(args));
+      return;
+    }
+    if (name == "math.len" || name == "numpy.len") {
+      ExpectArgc(name, argc, 1);
+      ListPtr list = ValueAsListPtr(args[0], name);
+      stack_.push_back(static_cast<int>(list->items.size()));
+      return;
+    }
+    if (name == "math.get" || name == "numpy.get") {
+      ExpectArgc(name, argc, 2);
+      ListPtr list = ValueAsListPtr(args[0], name);
+      int idx = NormalizeIndex(ValueAsInt(args[1], name),
+                               static_cast<int>(list->items.size()), name);
+      stack_.push_back(list->items[static_cast<std::size_t>(idx)]);
+      return;
+    }
+    if (name == "math.set" || name == "numpy.set") {
+      ExpectArgc(name, argc, 3);
+      ListPtr list = ValueAsListPtr(args[0], name);
+      int idx = NormalizeIndex(ValueAsInt(args[1], name),
+                               static_cast<int>(list->items.size()), name);
+      list->items[static_cast<std::size_t>(idx)] = args[2];
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "math.push" || name == "numpy.push") {
+      ExpectArgc(name, argc, 2);
+      ListPtr list = ValueAsListPtr(args[0], name);
+      list->items.push_back(args[1]);
+      stack_.push_back(static_cast<int>(list->items.size()));
+      return;
+    }
+    if (name == "math.pop" || name == "numpy.pop") {
+      ExpectArgc(name, argc, 1);
+      ListPtr list = ValueAsListPtr(args[0], name);
+      if (list->items.empty()) {
+        throw std::runtime_error(name + ": pop from empty list");
+      }
+      Value v = list->items.back();
+      list->items.pop_back();
+      stack_.push_back(v);
+      return;
+    }
+    if (name == "math.zeros" || name == "numpy.zeros") {
+      ExpectArgc(name, argc, 1);
+      stack_.push_back(MakeFilledIntList(ValueAsInt(args[0], name), 0, name));
+      return;
+    }
+    if (name == "math.ones" || name == "numpy.ones") {
+      ExpectArgc(name, argc, 1);
+      stack_.push_back(MakeFilledIntList(ValueAsInt(args[0], name), 1, name));
+      return;
+    }
+    if (name == "math.arange" || name == "numpy.arange") {
+      int start = 0;
+      int stop = 0;
+      int step = 1;
+      if (argc == 1) {
+        stop = ValueAsInt(args[0], name);
+      } else if (argc == 2) {
+        start = ValueAsInt(args[0], name);
+        stop = ValueAsInt(args[1], name);
+      } else if (argc == 3) {
+        start = ValueAsInt(args[0], name);
+        stop = ValueAsInt(args[1], name);
+        step = ValueAsInt(args[2], name);
+      } else {
+        throw std::runtime_error(name + " expects 1, 2, or 3 args");
+      }
+      if (step == 0) {
+        throw std::runtime_error(name + ": step must not be 0");
+      }
+      ListPtr out = std::make_shared<List>();
+      if (step > 0) {
+        for (int v = start; v < stop; v += step) {
+          out->items.push_back(v);
+        }
+      } else {
+        for (int v = start; v > stop; v += step) {
+          out->items.push_back(v);
+        }
+      }
+      stack_.push_back(out);
+      return;
+    }
+    if (name == "math.linspace" || name == "numpy.linspace") {
+      ExpectArgc(name, argc, 3);
+      int start = ValueAsInt(args[0], name);
+      int stop = ValueAsInt(args[1], name);
+      int count = ValueAsInt(args[2], name);
+      if (count <= 0) {
+        throw std::runtime_error(name + ": count must be > 0");
+      }
+      ListPtr out = std::make_shared<List>();
+      out->items.reserve(static_cast<std::size_t>(count));
+      if (count == 1) {
+        out->items.push_back(start);
+      } else {
+        const double dstart = static_cast<double>(start);
+        const double dstop = static_cast<double>(stop);
+        const double n = static_cast<double>(count - 1);
+        for (int i = 0; i < count; ++i) {
+          double t = static_cast<double>(i) / n;
+          out->items.push_back(
+              static_cast<int>(std::round(dstart + (dstop - dstart) * t)));
+        }
+      }
+      stack_.push_back(out);
+      return;
+    }
+    if (name == "math.sum" || name == "numpy.sum") {
+      ExpectArgc(name, argc, 1);
+      ListPtr list = ValueAsListPtr(args[0], name);
+      long long acc = 0;
+      for (const Value& v : list->items) {
+        acc += static_cast<long long>(ValueAsInt(v, name));
+      }
+      if (acc > static_cast<long long>(std::numeric_limits<int>::max())) {
+        acc = static_cast<long long>(std::numeric_limits<int>::max());
+      }
+      if (acc < static_cast<long long>(std::numeric_limits<int>::min())) {
+        acc = static_cast<long long>(std::numeric_limits<int>::min());
+      }
+      stack_.push_back(static_cast<int>(acc));
+      return;
+    }
+    if (name == "math.mean" || name == "numpy.mean") {
+      ExpectArgc(name, argc, 1);
+      ListPtr list = ValueAsListPtr(args[0], name);
+      if (list->items.empty()) {
+        throw std::runtime_error(name + ": empty list");
+      }
+      long long acc = 0;
+      for (const Value& v : list->items) {
+        acc += static_cast<long long>(ValueAsInt(v, name));
+      }
+      stack_.push_back(static_cast<int>(
+          std::round(static_cast<double>(acc) /
+                     static_cast<double>(list->items.size()))));
+      return;
+    }
+    if (name == "math.min" || name == "numpy.min") {
+      ExpectArgc(name, argc, 1);
+      ListPtr list = ValueAsListPtr(args[0], name);
+      if (list->items.empty()) {
+        throw std::runtime_error(name + ": empty list");
+      }
+      int best = ValueAsInt(list->items[0], name);
+      for (std::size_t i = 1; i < list->items.size(); ++i) {
+        best = std::min(best, ValueAsInt(list->items[i], name));
+      }
+      stack_.push_back(best);
+      return;
+    }
+    if (name == "math.max" || name == "numpy.max") {
+      ExpectArgc(name, argc, 1);
+      ListPtr list = ValueAsListPtr(args[0], name);
+      if (list->items.empty()) {
+        throw std::runtime_error(name + ": empty list");
+      }
+      int best = ValueAsInt(list->items[0], name);
+      for (std::size_t i = 1; i < list->items.size(); ++i) {
+        best = std::max(best, ValueAsInt(list->items[i], name));
+      }
+      stack_.push_back(best);
+      return;
+    }
+    if (name == "math.dot" || name == "numpy.dot") {
+      ExpectArgc(name, argc, 2);
+      ListPtr a = ValueAsListPtr(args[0], name);
+      ListPtr b = ValueAsListPtr(args[1], name);
+      if (a->items.size() != b->items.size()) {
+        throw std::runtime_error(name + ": list sizes must match");
+      }
+      long long acc = 0;
+      for (std::size_t i = 0; i < a->items.size(); ++i) {
+        acc += static_cast<long long>(ValueAsInt(a->items[i], name)) *
+               static_cast<long long>(ValueAsInt(b->items[i], name));
+      }
+      if (acc > static_cast<long long>(std::numeric_limits<int>::max())) {
+        acc = static_cast<long long>(std::numeric_limits<int>::max());
+      }
+      if (acc < static_cast<long long>(std::numeric_limits<int>::min())) {
+        acc = static_cast<long long>(std::numeric_limits<int>::min());
+      }
+      stack_.push_back(static_cast<int>(acc));
+      return;
+    }
+    if (name == "math.add" || name == "numpy.add") {
+      ExpectArgc(name, argc, 2);
+      stack_.push_back(ElementwiseBinary(args[0], args[1], name, '+'));
+      return;
+    }
+    if (name == "math.sub" || name == "numpy.sub") {
+      ExpectArgc(name, argc, 2);
+      stack_.push_back(ElementwiseBinary(args[0], args[1], name, '-'));
+      return;
+    }
+    if (name == "math.mul" || name == "numpy.mul") {
+      ExpectArgc(name, argc, 2);
+      stack_.push_back(ElementwiseBinary(args[0], args[1], name, '*'));
+      return;
+    }
+    if (name == "math.div" || name == "numpy.div") {
+      ExpectArgc(name, argc, 2);
+      stack_.push_back(ElementwiseBinary(args[0], args[1], name, '/'));
+      return;
+    }
+    if (name == "math.clip" || name == "numpy.clip") {
+      ExpectArgc(name, argc, 3);
+      ListPtr list = ValueAsListPtr(args[0], name);
+      int lo = ValueAsInt(args[1], name);
+      int hi = ValueAsInt(args[2], name);
+      if (lo > hi) {
+        std::swap(lo, hi);
+      }
+      ListPtr out = std::make_shared<List>();
+      out->items.reserve(list->items.size());
+      for (const Value& v : list->items) {
+        int x = ValueAsInt(v, name);
+        if (x < lo) x = lo;
+        if (x > hi) x = hi;
+        out->items.push_back(x);
+      }
+      stack_.push_back(out);
+      return;
+    }
+    if (name == "math.abs" || name == "numpy.abs") {
+      ExpectArgc(name, argc, 1);
+      if (std::holds_alternative<ListPtr>(args[0])) {
+        ListPtr list = ValueAsListPtr(args[0], name);
+        ListPtr out = std::make_shared<List>();
+        out->items.reserve(list->items.size());
+        for (const Value& v : list->items) {
+          out->items.push_back(std::abs(ValueAsInt(v, name)));
+        }
+        stack_.push_back(out);
+      } else {
+        stack_.push_back(std::abs(ValueAsInt(args[0], name)));
+      }
+      return;
+    }
     if (name == "random.seed") {
       ExpectArgc(name, argc, 1);
       const int seed = ValueAsInt(args[0], name);
@@ -3181,6 +3451,101 @@ class VM {
       return 0;
     }
     return ClampByte(static_cast<int>(std::round(sum / norm)));
+  }
+
+  static ListPtr ValueAsListPtr(const Value& value, const std::string& context) {
+    if (!std::holds_alternative<ListPtr>(value) || !std::get<ListPtr>(value)) {
+      throw std::runtime_error(context + ": expected list");
+    }
+    return std::get<ListPtr>(value);
+  }
+
+  static int NormalizeIndex(int idx, int n, const std::string& context) {
+    int out = idx;
+    if (out < 0) {
+      out += n;
+    }
+    if (out < 0 || out >= n) {
+      throw std::runtime_error(context + ": index out of range");
+    }
+    return out;
+  }
+
+  static ListPtr MakeListFromArgs(const std::vector<Value>& args) {
+    ListPtr list = std::make_shared<List>();
+    list->items = args;
+    return list;
+  }
+
+  static ListPtr MakeFilledIntList(int count, int value, const std::string& context) {
+    if (count < 0) {
+      throw std::runtime_error(context + ": count must be >= 0");
+    }
+    ListPtr list = std::make_shared<List>();
+    list->items.reserve(static_cast<std::size_t>(count));
+    for (int i = 0; i < count; ++i) {
+      list->items.push_back(value);
+    }
+    return list;
+  }
+
+  static ListPtr ElementwiseBinary(const Value& a, const Value& b,
+                                   const std::string& context, char op) {
+    const bool a_is_list = std::holds_alternative<ListPtr>(a);
+    const bool b_is_list = std::holds_alternative<ListPtr>(b);
+
+    auto apply_op = [&](int lhs, int rhs) -> int {
+      switch (op) {
+        case '+':
+          return lhs + rhs;
+        case '-':
+          return lhs - rhs;
+        case '*':
+          return lhs * rhs;
+        case '/':
+          if (rhs == 0) {
+            throw std::runtime_error(context + ": division by zero");
+          }
+          return lhs / rhs;
+        default:
+          throw std::runtime_error(context + ": unknown op");
+      }
+    };
+
+    ListPtr out = std::make_shared<List>();
+    if (!a_is_list && !b_is_list) {
+      out->items.push_back(apply_op(ValueAsInt(a, context), ValueAsInt(b, context)));
+      return out;
+    }
+    if (a_is_list && b_is_list) {
+      ListPtr la = ValueAsListPtr(a, context);
+      ListPtr lb = ValueAsListPtr(b, context);
+      if (la->items.size() != lb->items.size()) {
+        throw std::runtime_error(context + ": list sizes must match");
+      }
+      out->items.reserve(la->items.size());
+      for (std::size_t i = 0; i < la->items.size(); ++i) {
+        out->items.push_back(
+            apply_op(ValueAsInt(la->items[i], context), ValueAsInt(lb->items[i], context)));
+      }
+      return out;
+    }
+    if (a_is_list) {
+      ListPtr la = ValueAsListPtr(a, context);
+      int scalar = ValueAsInt(b, context);
+      out->items.reserve(la->items.size());
+      for (const Value& v : la->items) {
+        out->items.push_back(apply_op(ValueAsInt(v, context), scalar));
+      }
+      return out;
+    }
+    ListPtr lb = ValueAsListPtr(b, context);
+    int scalar = ValueAsInt(a, context);
+    out->items.reserve(lb->items.size());
+    for (const Value& v : lb->items) {
+      out->items.push_back(apply_op(scalar, ValueAsInt(v, context)));
+    }
+    return out;
   }
 
   static int TorchSigmoidPpm(int x) {
