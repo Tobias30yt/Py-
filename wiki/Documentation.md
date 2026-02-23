@@ -56,6 +56,7 @@ Prints runtime/compiler version.
 - `gfx.window_ratio(w, h, ratio_w, ratio_h, "title")`
 - `gfx.keep_aspect(enabled)`
 - `gfx.refresh_rate(hz)` (`0` disables pacing)
+- `gfx.seed(seed)`
 - `gfx.sync()` (manual frame pacing call)
 - `gfx.mouse_x()`, `gfx.mouse_y()`
 - `gfx.mouse_down(button)`
@@ -80,8 +81,14 @@ Prints runtime/compiler version.
 - `gfx.draw_sprite_tinted(id, x, y, tr, tg, tb)`
 - `gfx.draw_sprite_scaled_tinted(id, x, y, w, h, tr, tg, tb)`
 - `gfx.draw_sprite_rotated(id, x, y, angle_deg, scale1000, tr, tg, tb)`
+- `gfx.particles_spawn(x, y, count, speed, life, r, g, b)`
+- `gfx.particles_update()`
+- `gfx.particles_draw(size)`
+- `gfx.particles_clear()`
+- `gfx.particles_count()`
+- `gfx.shake(intensity, frames)`
 - `gfx.nine_patch(id, sx, sy, sw, sh, border, dx, dy, dw, dh)`
-- `gfx.shader_set(mode, p1, p2, p3)` (`1` grayscale, `2` scanline, `3` wave, `4` invert, `5` posterize, `6` rgb-split, `7` vignette, `8` edge, `9` pixelate)
+- `gfx.shader_set(mode, p1, p2, p3)` (`1` grayscale, `2` scanline, `3` wave, `4` invert, `5` posterize, `6` rgb-split, `7` vignette, `8` edge, `9` pixelate, `10` threshold)
 - `gfx.shader_clear()`
 - `gfx.shader_create()`
 - `gfx.shader_program_clear(program_id)`

@@ -1,0 +1,60 @@
+gfx.window_ratio(960, 540, 16, 9, "py++ v0.7 Showcase")
+gfx.keep_aspect(1)
+gfx.refresh_rate(60)
+gfx.seed(1337)
+
+let mode = 0
+
+while gfx.closed() == 0:
+  gfx.poll()
+  if gfx.key_down(27) == 1:
+    gfx.close()
+  end
+
+  if gfx.key_down(49) == 1:
+    let mode = 0
+    gfx.shader_clear()
+  end
+  if gfx.key_down(50) == 1:
+    let mode = 1
+    gfx.shader_set(8, 220, 0, 0)
+  end
+  if gfx.key_down(51) == 1:
+    let mode = 2
+    gfx.shader_set(9, 6, 0, 0)
+  end
+  if gfx.key_down(52) == 1:
+    let mode = 3
+    gfx.shader_set(10, 120, 255, 40)
+  end
+
+  if gfx.mouse_down(0) == 1:
+    gfx.particles_spawn(gfx.mouse_x(), gfx.mouse_y(), 12, 24, 60, 255, 200, 120)
+    gfx.shake(3, 4)
+  end
+
+  gfx.particles_update()
+
+  gfx.clear(12, 16, 28)
+  gfx.gradient_rect(0, 0, 960, 200, 20, 30, 48, 35, 55, 92, 1)
+  gfx.rounded_rect(24, 24, 420, 170, 24, 36, 60, 100)
+  gfx.rounded_rect(32, 32, 404, 154, 20, 18, 28, 46)
+  gfx.text_scaled(48, 52, "PY++ 0.7 SHOWCASE", 2, 220, 240, 255)
+  gfx.text(48, 94, "LMB: PARTICLES + SHAKE", 180, 220, 255)
+  gfx.text(48, 108, "1 NONE 2 EDGE 3 PIXELATE 4 THRESHOLD", 180, 220, 255)
+
+  gfx.line_thick(500, 120, 900, 260, 6, 130, 220, 255)
+  gfx.triangle(560, 300, 880, 430, 520, 480, 255, 140, 100)
+  gfx.circle_outline(820, 120, 52, 8, 160, 230, 255)
+
+  gfx.particles_draw(3)
+
+  gfx.text(24, 512, "FRAME:", 220, 240, 255)
+  gfx.text(66, 512, gfx.frame(), 220, 255, 180)
+  gfx.text(150, 512, "PART:", 220, 240, 255)
+  gfx.text(186, 512, gfx.particles_count(), 220, 255, 180)
+  gfx.text(250, 512, "MODE:", 220, 240, 255)
+  gfx.text(286, 512, mode, 220, 255, 180)
+
+  gfx.present()
+end

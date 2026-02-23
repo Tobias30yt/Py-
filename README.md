@@ -67,6 +67,7 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gfx.window_ratio(w, h, ratio_w, ratio_h, "title")`
   - `gfx.keep_aspect(0|1)`
   - `gfx.refresh_rate(hz)` (`0` disables pacing)
+  - `gfx.seed(seed)`
   - `gfx.poll()`
   - `gfx.present()`
   - `gfx.sync()` (manual frame pacing call)
@@ -84,6 +85,12 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gfx.draw_sprite_tinted(id, x, y, tr, tg, tb)`
   - `gfx.draw_sprite_scaled_tinted(id, x, y, w, h, tr, tg, tb)`
   - `gfx.draw_sprite_rotated(id, x, y, angle_deg, scale1000, tr, tg, tb)`
+  - `gfx.particles_spawn(x, y, count, speed, life, r, g, b)`
+  - `gfx.particles_update()`
+  - `gfx.particles_draw(size)`
+  - `gfx.particles_clear()`
+  - `gfx.particles_count()`
+  - `gfx.shake(intensity, frames)`
   - `gfx.draw_sprite_region(id, sx, sy, sw, sh, dx, dy, dw, dh)`
   - `gfx.nine_patch(id, sx, sy, sw, sh, border, dx, dy, dw, dh)`
   - `gfx.anim_register(first_sprite, frame_count, frame_ticks, mode)` (`0` once, `1` loop, `2` ping-pong)
@@ -91,7 +98,7 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gfx.anim_length(anim_id)`
   - `gfx.anim_draw(anim_id, tick, x, y)`
   - `gfx.anim_draw_scaled(anim_id, tick, x, y, w, h)`
-  - `gfx.shader_set(mode, p1, p2, p3)` (`1` grayscale, `2` scanline, `3` wave, `4` invert, `5` posterize, `6` rgb-split, `7` vignette, `8` edge, `9` pixelate)
+  - `gfx.shader_set(mode, p1, p2, p3)` (`1` grayscale, `2` scanline, `3` wave, `4` invert, `5` posterize, `6` rgb-split, `7` vignette, `8` edge, `9` pixelate, `10` threshold)
   - `gfx.shader_clear()`
   - `gfx.shader_create()`
   - `gfx.shader_program_clear(program_id)`

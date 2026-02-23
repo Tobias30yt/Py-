@@ -679,6 +679,16 @@ struct GraphicsState {
     std::vector<SpriteTexel> texels;
   };
   std::vector<SpriteAsset> sprites;
+  struct Particle {
+    double x = 0.0;
+    double y = 0.0;
+    double vx = 0.0;
+    double vy = 0.0;
+    int life = 0;
+    int max_life = 1;
+    Pixel color{};
+  };
+  std::vector<Particle> particles;
   struct AnimClip {
     int first_sprite = 0;
     int frame_count = 0;
@@ -723,6 +733,9 @@ struct GraphicsState {
   int shader_p3 = 0;
   int shader_program_active = -1;
   int present_frame = 0;
+  int shake_intensity = 0;
+  int shake_frames = 0;
+  std::mt19937 gfx_rng{1337u};
   int refresh_rate_hz = 0;
   std::chrono::steady_clock::time_point next_frame_time{};
   bool frame_sync_ready = false;
@@ -742,6 +755,9 @@ struct GraphicsState {
     shader_p2 = 0;
     shader_p3 = 0;
     shader_program_active = -1;
+    particles.clear();
+    shake_intensity = 0;
+    shake_frames = 0;
   }
 
   void Clear(int r, int g, int b) {
@@ -1027,6 +1043,8 @@ struct GraphicsState {
 
   int FrameCount() const { return present_frame; }
 
+  void Seed(int seed) { gfx_rng.seed(static_cast<std::uint32_t>(seed)); }
+
   void OpenWindow(int w, int h, const std::string& title) {
     Open(w, h);
 #ifdef _WIN32
@@ -1160,6 +1178,9 @@ struct GraphicsState {
     BlitFrameToHdc(hdc);
     ReleaseDC(hwnd, hdc);
     present_frame += 1;
+    if (shake_frames > 0) {
+      shake_frames -= 1;
+    }
     SyncFrame();
     return 1;
 #else
@@ -1335,6 +1356,110 @@ struct GraphicsState {
         }
       }
     }
+  }
+
+  void ParticlesSpawn(int x, int y, int count, int speed, int life, int r, int g,
+                      int b) {
+    EnsureOpen("gfx.particles_spawn");
+    if (count <= 0 || life <= 0) {
+      return;
+    }
+    if (count > 4000) {
+      count = 4000;
+    }
+    if (speed < 1) {
+      speed = 1;
+    }
+    if (life > 600) {
+      life = 600;
+    }
+    std::uniform_real_distribution<double> angle_dist(
+        0.0, 2.0 * 3.14159265358979323846);
+    std::uniform_real_distribution<double> speed_scale(0.35, 1.0);
+    Pixel col{ClampColor(r), ClampColor(g), ClampColor(b)};
+    particles.reserve(particles.size() + static_cast<std::size_t>(count));
+    for (int i = 0; i < count; ++i) {
+      const double a = angle_dist(gfx_rng);
+      const double sp = static_cast<double>(speed) * speed_scale(gfx_rng) / 16.0;
+      Particle p;
+      p.x = static_cast<double>(x);
+      p.y = static_cast<double>(y);
+      p.vx = std::cos(a) * sp;
+      p.vy = std::sin(a) * sp - 0.7;
+      p.life = life;
+      p.max_life = life;
+      p.color = col;
+      particles.push_back(p);
+    }
+  }
+
+  void ParticlesUpdate() {
+    EnsureOpen("gfx.particles_update");
+    constexpr double gravity = 0.09;
+    std::size_t w = 0;
+    for (std::size_t i = 0; i < particles.size(); ++i) {
+      Particle p = particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += gravity;
+      p.life -= 1;
+      if (p.life <= 0) {
+        continue;
+      }
+      if (p.x < -16.0 || p.y < -16.0 || p.x >= static_cast<double>(width + 16) ||
+          p.y >= static_cast<double>(height + 16)) {
+        continue;
+      }
+      particles[w++] = p;
+    }
+    particles.resize(w);
+  }
+
+  void ParticlesDraw(int size) {
+    EnsureOpen("gfx.particles_draw");
+    if (size < 1) {
+      size = 1;
+    }
+    if (size > 12) {
+      size = 12;
+    }
+    const int half = size / 2;
+    for (const Particle& p : particles) {
+      const int alpha =
+          std::max(0, std::min(255, (255 * p.life) / std::max(1, p.max_life)));
+      const int rr = (p.color.r * alpha) / 255;
+      const int gg = (p.color.g * alpha) / 255;
+      const int bb = (p.color.b * alpha) / 255;
+      if (size == 1) {
+        SetPixelRaw(static_cast<int>(std::round(p.x)),
+                    static_cast<int>(std::round(p.y)),
+                    Pixel{ClampColor(rr), ClampColor(gg), ClampColor(bb)});
+      } else {
+        Circle(static_cast<int>(std::round(p.x)),
+               static_cast<int>(std::round(p.y)), half, rr, gg, bb);
+      }
+    }
+  }
+
+  void ParticlesClear() { particles.clear(); }
+
+  int ParticlesCount() const { return static_cast<int>(particles.size()); }
+
+  void Shake(int intensity, int frames) {
+    if (intensity < 0) {
+      intensity = 0;
+    }
+    if (frames < 0) {
+      frames = 0;
+    }
+    if (intensity > 64) {
+      intensity = 64;
+    }
+    if (frames > 600) {
+      frames = 600;
+    }
+    shake_intensity = intensity;
+    shake_frames = frames;
   }
 
   void DrawSpriteRotated(int sprite_id, int x, int y, int angle_deg, int scale,
@@ -1892,6 +2017,16 @@ struct GraphicsState {
       const int bx = (x / block) * block;
       const int by = (y / block) * block;
       p = ReadPixelShaderSource(bx, by);
+    } else if (mode == 10) {
+      // Threshold/duotone: p1 threshold 0..255, p2 high level, p3 low level
+      const int threshold = std::max(0, std::min(255, p1));
+      const int hi = std::max(0, std::min(255, p2));
+      const int lo = std::max(0, std::min(255, p3));
+      const int lum = (p.r * 30 + p.g * 59 + p.b * 11) / 100;
+      const int out = (lum >= threshold) ? hi : lo;
+      p.r = out;
+      p.g = out;
+      p.b = out;
     }
     p.r = ClampColor(p.r);
     p.g = ClampColor(p.g);
@@ -2223,12 +2358,17 @@ struct GraphicsState {
     }
 
     SetStretchBltMode(hdc, COLORONCOLOR);
-    const int dst_x = viewport_rect.left;
-    const int dst_y = viewport_rect.top;
+    int dst_x = viewport_rect.left;
+    int dst_y = viewport_rect.top;
     const int dst_w =
         std::max(1, static_cast<int>(viewport_rect.right - viewport_rect.left));
     const int dst_h = std::max(
         1, static_cast<int>(viewport_rect.bottom - viewport_rect.top));
+    if (shake_frames > 0 && shake_intensity > 0) {
+      std::uniform_int_distribution<int> jitter(-shake_intensity, shake_intensity);
+      dst_x += jitter(gfx_rng);
+      dst_y += jitter(gfx_rng);
+    }
     StretchDIBits(hdc, dst_x, dst_y, dst_w, dst_h, 0, 0, width, height,
                   rgba_buffer.data(), &bmi, DIB_RGB_COLORS, SRCCOPY);
   }
@@ -4252,6 +4392,12 @@ class VM {
       stack_.push_back(0);
       return;
     }
+    if (name == "gfx.seed") {
+      ExpectArgc(name, argc, 1);
+      gfx_.Seed(ValueAsInt(args[0], name));
+      stack_.push_back(0);
+      return;
+    }
     if (name == "gfx.poll") {
       ExpectArgc(name, argc, 0);
       stack_.push_back(gfx_.PollEvents());
@@ -4379,6 +4525,45 @@ class VM {
           ValueAsInt(args[2], name), ValueAsInt(args[3], name),
           ValueAsInt(args[4], name), ValueAsInt(args[5], name),
           ValueAsInt(args[6], name), ValueAsInt(args[7], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.particles_spawn") {
+      ExpectArgc(name, argc, 8);
+      gfx_.ParticlesSpawn(
+          ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+          ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+          ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+          ValueAsInt(args[6], name), ValueAsInt(args[7], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.particles_update") {
+      ExpectArgc(name, argc, 0);
+      gfx_.ParticlesUpdate();
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.particles_draw") {
+      ExpectArgc(name, argc, 1);
+      gfx_.ParticlesDraw(ValueAsInt(args[0], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.particles_clear") {
+      ExpectArgc(name, argc, 0);
+      gfx_.ParticlesClear();
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.particles_count") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(gfx_.ParticlesCount());
+      return;
+    }
+    if (name == "gfx.shake") {
+      ExpectArgc(name, argc, 2);
+      gfx_.Shake(ValueAsInt(args[0], name), ValueAsInt(args[1], name));
       stack_.push_back(0);
       return;
     }
