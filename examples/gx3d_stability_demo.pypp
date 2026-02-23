@@ -1,0 +1,66 @@
+# title_image: assets/pypp_title.ppm
+gfx.window_ratio(1280, 720, 16, 9, "py++ gx3d Stability Demo")
+gfx.keep_aspect(1)
+gfx.refresh_rate(60)
+
+gx3d.reset()
+gx3d.camera(0, 0, -320)
+gx3d.fov(420)
+gx3d.clip(4, 8000)
+gx3d.backface_cull(1)
+gx3d.depth_bias(0)
+
+let angle = 0
+let z = 260
+let use_cull = 1
+let bias = 0
+
+while gfx.closed() == 0:
+  gfx.poll()
+  if gfx.key_down(27) == 1:
+    gfx.close()
+  end
+
+  if gfx.key_down(38) == 1:
+    let z = z - 3
+  end
+  if gfx.key_down(40) == 1:
+    let z = z + 3
+  end
+  if gfx.key_down(67) == 1:
+    let use_cull = 1 - use_cull
+    time.sleep_ms(120)
+  end
+  if gfx.key_down(81) == 1:
+    let bias = bias - 2
+  end
+  if gfx.key_down(69) == 1:
+    let bias = bias + 2
+  end
+
+  gx3d.backface_cull(use_cull)
+  gx3d.depth_bias(bias)
+
+  let angle = angle + 2
+  gfx.clear(9, 12, 19)
+  gx3d.rotate(angle / 3, angle, 0)
+  gx3d.translate(0, 0, 0)
+  gx3d.grid(1400, 80, -180)
+  gx3d.axis(180)
+
+  # Move toward near plane to test clipping stability.
+  gx3d.cube_solid(0, 0, z, 220, 210, 140, 110)
+  gx3d.cuboid_solid(-280, -40, z + 120, 180, 140, 120, 120, 200, 255)
+  gx3d.pyramid_solid(300, 20, z + 160, 180, 130, 190, 255)
+
+  gx3d.label(0, -150, z, "NEAR-CLIP TEST", 230, 235, 255)
+  gfx.text(22, 20, "UP/DOWN: move object  C: toggle cull  Q/E: depth bias  ESC: quit", 170, 210, 240)
+  gfx.text(22, 48, "CULL", 200, 220, 255)
+  gfx.text(76, 48, use_cull, 255, 220, 140)
+  gfx.text(120, 48, "BIAS", 200, 220, 255)
+  gfx.text(170, 48, bias, 255, 220, 140)
+  gfx.text(220, 48, "Z", 200, 220, 255)
+  gfx.text(245, 48, z, 255, 220, 140)
+
+  gfx.present()
+end

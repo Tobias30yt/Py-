@@ -262,6 +262,8 @@ High-use `gx3d` calls:
 - `gx3d.camera(x, y, z)`
 - `gx3d.camera_move(dx, dy, dz)`
 - `gx3d.clip(near, far)`
+- `gx3d.backface_cull(0|1)`
+- `gx3d.depth_bias(milli)`
 - `gx3d.fov(fov)`
 - `gx3d.rotate(rx, ry, rz)`
 - `gx3d.rotate_add(drx, dry, drz)`
@@ -274,6 +276,15 @@ High-use `gx3d` calls:
 - `gx3d.cuboid_solid(...)`
 - `gx3d.axis(len)`
 - `gx3d.grid(size, step, y)`
+- `gx3d.world_to_screen_x(x, y, z)`
+- `gx3d.world_to_screen_y(x, y, z)`
+- `gx3d.world_visible(x, y, z)`
+- `gx3d.label(x, y, z, "TEXT", r, g, b)`
+
+3D renderer improvements in this release:
+- near-plane polygon clipping for solid/textured primitives
+- optional backface culling for cleaner mesh rendering
+- depth-bias control to reduce coplanar z-fighting
 
 Recommended render order:
 1. `gfx.poll()`

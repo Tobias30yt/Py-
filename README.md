@@ -1,4 +1,4 @@
-# py++ (C++ edition) - Update 0.7.4
+# py++ (C++ edition) - Update 0.7.5
 
 `py++` ist jetzt komplett in C++ umgesetzt (kein Python-Compiler mehr im Projekt).
 Die Syntax bleibt python-aehnlich, aber bewusst minimal.
@@ -145,6 +145,8 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gx3d.camera_move(dx, dy, dz)`
   - `gx3d.fov(fov)`
   - `gx3d.clip(near, far)`
+  - `gx3d.backface_cull(0|1)` (solid face culling toggle)
+  - `gx3d.depth_bias(milli)` (z-fighting tuning)
   - `gx3d.rotate(rx, ry, rz)`
   - `gx3d.rotate_add(drx, dry, drz)`
   - `gx3d.translate(x, y, z)`
@@ -167,6 +169,15 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gx3d.cuboid_sprite(x, y, z, sx, sy, sz, sprite_id)`
   - `gx3d.axis(length)`
   - `gx3d.grid(size, step, y)`
+  - `gx3d.world_to_screen_x(x, y, z)`
+  - `gx3d.world_to_screen_y(x, y, z)`
+  - `gx3d.world_visible(x, y, z)` (`0|1`)
+  - `gx3d.label(x, y, z, "TEXT", r, g, b)`
+
+3D stability fixes in this version:
+- near-plane polygon clipping for solid/textured faces (less hole flicker at close range)
+- optional backface culling for cleaner solid rendering
+- depth bias support for coplanar surfaces
 
 ## Build
 
@@ -217,6 +228,7 @@ Hinweis:
 .\build\pypp.exe run examples\graphics.pypp
 .\build\pypp.exe run examples\gx3d_frame.pypp
 .\build\pypp.exe run examples\gx3d_test.pypp
+.\build\pypp.exe run examples\gx3d_stability_demo.pypp
 .\build\pypp.exe run examples\multiplayer_test.pypp
 .\build\pypp.exe run examples\random_noise.pypp
 .\build\pypp.exe run examples\torch_demo.pypp
@@ -237,7 +249,7 @@ import config as c
 print(c.width)
 ```
 
-Hinweis: Klassen/Funktionen als eigene User-Definitionen sind fuer den naechsten Sprachschritt vorgesehen. `0.7.4` liefert das aktuelle Alias-Import-Fundament plus Collision-Helper.
+Hinweis: Klassen/Funktionen als eigene User-Definitionen sind fuer den naechsten Sprachschritt vorgesehen. `0.7.5` liefert das aktuelle Alias-Import-Fundament plus Collision-Helper.
 
 ## pypp global in PATH
 
@@ -284,8 +296,8 @@ git add .
 git commit -m "Add release workflow"
 git push
 
-git tag v0.7.4
-git push origin v0.7.4
+git tag v0.7.5
+git push origin v0.7.5
 ```
 
 ## VS Code Extension (Language Support)

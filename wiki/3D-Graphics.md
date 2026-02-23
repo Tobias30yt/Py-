@@ -23,6 +23,10 @@ It projects 3D primitives into the active `gfx` framebuffer/window with configur
   - Sets projection scale (larger -> stronger perspective scale)
 - `gx3d.clip(near, far)`
   - Sets near/far clip distances (`near > 0`, `far > near`)
+- `gx3d.backface_cull(0|1)`
+  - Toggles backface culling for solid/textured polygon rendering
+- `gx3d.depth_bias(milli)`
+  - Adds depth offset (`milli / 1000.0`) to reduce coplanar z-fighting
 - `gx3d.rotate(rx, ry, rz)`
   - Sets current object rotation in degrees
 - `gx3d.rotate_add(drx, dry, drz)`
@@ -67,6 +71,14 @@ It projects 3D primitives into the active `gfx` framebuffer/window with configur
   - Draws world axes
 - `gx3d.grid(size, step, y)`
   - Draws a ground grid plane
+- `gx3d.world_to_screen_x(x, y, z)`
+  - Returns projected screen x, or `-1` if not visible
+- `gx3d.world_to_screen_y(x, y, z)`
+  - Returns projected screen y, or `-1` if not visible
+- `gx3d.world_visible(x, y, z)`
+  - Returns `1` if point is visible after projection/clip, else `0`
+- `gx3d.label(x, y, z, "TEXT", r, g, b)`
+  - Draws 2D text anchored to a projected 3D point
 
 ## Prerequisite
 
@@ -123,6 +135,7 @@ gfx.present()
 - All `gx3d` drawing calls validate that `gfx` is initialized.
 - Colors are clamped to `0..255`.
 - Invalid clip settings (`near <= 0`, `far <= near`) throw descriptive runtime errors.
+- Solid/textured polygons are clipped against near plane for better close-range stability.
 - Out-of-view segments are clipped by near/far projection rejection.
 - Depth buffer resets automatically when `gfx.clear(...)` is called.
 

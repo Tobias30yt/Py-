@@ -2880,6 +2880,8 @@ class VM {
       fov_ = 300.0;
       near_clip_ = 1.0;
       far_clip_ = 10000.0;
+      backface_cull_ = false;
+      depth_bias_ = 0.0;
       depth_dirty_ = true;
     }
 
@@ -2938,6 +2940,52 @@ class VM {
       }
       near_clip_ = static_cast<double>(near_z);
       far_clip_ = static_cast<double>(far_z);
+    }
+
+    void BackfaceCull(int enabled) { backface_cull_ = (enabled != 0); }
+
+    void DepthBias(int milli_units) {
+      depth_bias_ = static_cast<double>(milli_units) / 1000.0;
+    }
+
+    int WorldToScreenX(int x, int y, int z) const {
+      auto p = Project(ApplyTransform(Vec3{static_cast<double>(x),
+                                           static_cast<double>(y),
+                                           static_cast<double>(z)}));
+      if (!p.has_value()) {
+        return -1;
+      }
+      return p->first;
+    }
+
+    int WorldToScreenY(int x, int y, int z) const {
+      auto p = Project(ApplyTransform(Vec3{static_cast<double>(x),
+                                           static_cast<double>(y),
+                                           static_cast<double>(z)}));
+      if (!p.has_value()) {
+        return -1;
+      }
+      return p->second;
+    }
+
+    int WorldVisible(int x, int y, int z) const {
+      auto p = Project(ApplyTransform(Vec3{static_cast<double>(x),
+                                           static_cast<double>(y),
+                                           static_cast<double>(z)}));
+      return p.has_value() ? 1 : 0;
+    }
+
+    void Label(int x, int y, int z, const std::string& text, int r, int g,
+               int b) {
+      RequireGfx("gx3d.label");
+      auto p = Project(ApplyTransform(Vec3{static_cast<double>(x),
+                                           static_cast<double>(y),
+                                           static_cast<double>(z)}));
+      if (!p.has_value()) {
+        return;
+      }
+      gfx_.Text(p->first, p->second, text, ClampColor(r), ClampColor(g),
+                ClampColor(b));
     }
 
     void Point(int x, int y, int z, int r, int g, int b) {
@@ -3108,24 +3156,19 @@ class VM {
       }};
 
       for (const auto& f : faces) {
-        auto sv0 = ProjectVertex(verts[static_cast<std::size_t>(f[0])]);
-        auto sv1 = ProjectVertex(verts[static_cast<std::size_t>(f[1])]);
-        auto sv2 = ProjectVertex(verts[static_cast<std::size_t>(f[2])]);
-        auto sv3 = ProjectVertex(verts[static_cast<std::size_t>(f[3])]);
-        if (!sv0.has_value() || !sv1.has_value() || !sv2.has_value() ||
-            !sv3.has_value()) {
-          continue;
-        }
-
-        int shade = 255 - static_cast<int>((sv0->z + sv1->z + sv2->z + sv3->z) / 4.0 / 40.0);
+        const Vec3& v0 = verts[static_cast<std::size_t>(f[0])];
+        const Vec3& v1 = verts[static_cast<std::size_t>(f[1])];
+        const Vec3& v2 = verts[static_cast<std::size_t>(f[2])];
+        const Vec3& v3 = verts[static_cast<std::size_t>(f[3])];
+        const double z_avg =
+            ((v0.z + v1.z + v2.z + v3.z) / 4.0) - cam_.z;
+        int shade = 255 - static_cast<int>(z_avg / 40.0);
         if (shade < 55) shade = 55;
         if (shade > 255) shade = 255;
         const int sr = (ClampColor(r) * shade) / 255;
         const int sg = (ClampColor(g) * shade) / 255;
         const int sb = (ClampColor(b) * shade) / 255;
-
-        FillTriangleDepth(*sv0, *sv1, *sv2, sr, sg, sb);
-        FillTriangleDepth(*sv0, *sv2, *sv3, sr, sg, sb);
+        DrawSolidPolygonClipped({v0, v1, v2, v3}, sr, sg, sb);
       }
     }
 
@@ -3156,20 +3199,17 @@ class VM {
                        int y3, int z3, int r, int g, int b) {
       RequireGfx("gx3d.triangle_solid");
       EnsureDepthBuffer();
-      auto sv1 = ProjectVertex(ApplyTransform(Vec3{static_cast<double>(x1),
-                                                   static_cast<double>(y1),
-                                                   static_cast<double>(z1)}));
-      auto sv2 = ProjectVertex(ApplyTransform(Vec3{static_cast<double>(x2),
-                                                   static_cast<double>(y2),
-                                                   static_cast<double>(z2)}));
-      auto sv3 = ProjectVertex(ApplyTransform(Vec3{static_cast<double>(x3),
-                                                   static_cast<double>(y3),
-                                                   static_cast<double>(z3)}));
-      if (!sv1.has_value() || !sv2.has_value() || !sv3.has_value()) {
-        return;
-      }
-      FillTriangleDepth(*sv1, *sv2, *sv3, ClampColor(r), ClampColor(g),
-                        ClampColor(b));
+      const Vec3 v1 = ApplyTransform(Vec3{static_cast<double>(x1),
+                                          static_cast<double>(y1),
+                                          static_cast<double>(z1)});
+      const Vec3 v2 = ApplyTransform(Vec3{static_cast<double>(x2),
+                                          static_cast<double>(y2),
+                                          static_cast<double>(z2)});
+      const Vec3 v3 = ApplyTransform(Vec3{static_cast<double>(x3),
+                                          static_cast<double>(y3),
+                                          static_cast<double>(z3)});
+      DrawSolidPolygonClipped({v1, v2, v3}, ClampColor(r), ClampColor(g),
+                              ClampColor(b));
     }
 
     void Quad(int x1, int y1, int z1, int x2, int y2, int z2, int x3, int y3,
@@ -3295,19 +3335,17 @@ class VM {
       }};
 
       for (const auto& f : faces) {
-        auto sv0 = ProjectVertex(verts[static_cast<std::size_t>(f[0])]);
-        auto sv1 = ProjectVertex(verts[static_cast<std::size_t>(f[1])]);
-        auto sv2 = ProjectVertex(verts[static_cast<std::size_t>(f[2])]);
-        if (!sv0.has_value() || !sv1.has_value() || !sv2.has_value()) {
-          continue;
-        }
-        int shade = 255 - static_cast<int>((sv0->z + sv1->z + sv2->z) / 3.0 / 45.0);
+        const Vec3& v0 = verts[static_cast<std::size_t>(f[0])];
+        const Vec3& v1 = verts[static_cast<std::size_t>(f[1])];
+        const Vec3& v2 = verts[static_cast<std::size_t>(f[2])];
+        const double z_avg = ((v0.z + v1.z + v2.z) / 3.0) - cam_.z;
+        int shade = 255 - static_cast<int>(z_avg / 45.0);
         if (shade < 55) shade = 55;
         if (shade > 255) shade = 255;
         const int sr = (ClampColor(r) * shade) / 255;
         const int sg = (ClampColor(g) * shade) / 255;
         const int sb = (ClampColor(b) * shade) / 255;
-        FillTriangleDepth(*sv0, *sv1, *sv2, sr, sg, sb);
+        DrawSolidPolygonClipped({v0, v1, v2}, sr, sg, sb);
       }
     }
 
@@ -3363,21 +3401,13 @@ class VM {
       }};
 
       for (const auto& f : faces) {
-        auto s0 = ProjectVertexUv(verts[static_cast<std::size_t>(f[0])], uv[0].first,
-                                  uv[0].second);
-        auto s1 = ProjectVertexUv(verts[static_cast<std::size_t>(f[1])], uv[1].first,
-                                  uv[1].second);
-        auto s2 = ProjectVertexUv(verts[static_cast<std::size_t>(f[2])], uv[2].first,
-                                  uv[2].second);
-        auto s3 = ProjectVertexUv(verts[static_cast<std::size_t>(f[3])], uv[3].first,
-                                  uv[3].second);
-        if (!s0.has_value() || !s1.has_value() || !s2.has_value() ||
-            !s3.has_value()) {
-          continue;
-        }
-
-        FillTriangleDepthTextured(*s0, *s1, *s2, spr);
-        FillTriangleDepthTextured(*s0, *s2, *s3, spr);
+        DrawTexturedQuadClipped(
+            verts[static_cast<std::size_t>(f[0])],
+            verts[static_cast<std::size_t>(f[1])],
+            verts[static_cast<std::size_t>(f[2])],
+            verts[static_cast<std::size_t>(f[3])], uv[0].first, uv[0].second,
+            uv[1].first, uv[1].second, uv[2].first, uv[2].second, uv[3].first,
+            uv[3].second, spr);
       }
     }
 
@@ -3403,6 +3433,159 @@ class VM {
     }
 
    private:
+    struct WorldVertexUv {
+      Vec3 p;
+      double u = 0.0;
+      double v = 0.0;
+    };
+
+    std::vector<Vec3> ClipPolygonNear(const std::vector<Vec3>& in) const {
+      std::vector<Vec3> out;
+      if (in.empty()) {
+        return out;
+      }
+      const double near_plane_z = cam_.z + near_clip_;
+      auto inside = [&](const Vec3& v) { return v.z >= near_plane_z; };
+      auto intersect = [&](const Vec3& a, const Vec3& b) {
+        const double dz = b.z - a.z;
+        double t = 0.0;
+        if (std::abs(dz) > 1e-12) {
+          t = (near_plane_z - a.z) / dz;
+        }
+        if (t < 0.0) t = 0.0;
+        if (t > 1.0) t = 1.0;
+        return Vec3{a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t,
+                    near_plane_z};
+      };
+
+      Vec3 s = in.back();
+      bool s_in = inside(s);
+      for (const Vec3& e : in) {
+        const bool e_in = inside(e);
+        if (s_in && e_in) {
+          out.push_back(e);
+        } else if (s_in && !e_in) {
+          out.push_back(intersect(s, e));
+        } else if (!s_in && e_in) {
+          out.push_back(intersect(s, e));
+          out.push_back(e);
+        }
+        s = e;
+        s_in = e_in;
+      }
+      return out;
+    }
+
+    std::vector<WorldVertexUv> ClipPolygonNearUv(
+        const std::vector<WorldVertexUv>& in) const {
+      std::vector<WorldVertexUv> out;
+      if (in.empty()) {
+        return out;
+      }
+      const double near_plane_z = cam_.z + near_clip_;
+      auto inside = [&](const WorldVertexUv& v) { return v.p.z >= near_plane_z; };
+      auto intersect = [&](const WorldVertexUv& a, const WorldVertexUv& b) {
+        const double dz = b.p.z - a.p.z;
+        double t = 0.0;
+        if (std::abs(dz) > 1e-12) {
+          t = (near_plane_z - a.p.z) / dz;
+        }
+        if (t < 0.0) t = 0.0;
+        if (t > 1.0) t = 1.0;
+        WorldVertexUv out_v;
+        out_v.p = Vec3{a.p.x + (b.p.x - a.p.x) * t, a.p.y + (b.p.y - a.p.y) * t,
+                       near_plane_z};
+        out_v.u = a.u + (b.u - a.u) * t;
+        out_v.v = a.v + (b.v - a.v) * t;
+        return out_v;
+      };
+
+      WorldVertexUv s = in.back();
+      bool s_in = inside(s);
+      for (const WorldVertexUv& e : in) {
+        const bool e_in = inside(e);
+        if (s_in && e_in) {
+          out.push_back(e);
+        } else if (s_in && !e_in) {
+          out.push_back(intersect(s, e));
+        } else if (!s_in && e_in) {
+          out.push_back(intersect(s, e));
+          out.push_back(e);
+        }
+        s = e;
+        s_in = e_in;
+      }
+      return out;
+    }
+
+    bool IsBackface(const ScreenVertex& a, const ScreenVertex& b,
+                    const ScreenVertex& c) const {
+      const long long ax = static_cast<long long>(b.x) - a.x;
+      const long long ay = static_cast<long long>(b.y) - a.y;
+      const long long bx = static_cast<long long>(c.x) - a.x;
+      const long long by = static_cast<long long>(c.y) - a.y;
+      const long long cross = ax * by - ay * bx;
+      return cross <= 0;
+    }
+
+    void DrawSolidPolygonClipped(const std::vector<Vec3>& poly_world, int r, int g,
+                                 int b) {
+      std::vector<Vec3> clipped = ClipPolygonNear(poly_world);
+      if (clipped.size() < 3) {
+        return;
+      }
+      std::vector<ScreenVertex> sv;
+      sv.reserve(clipped.size());
+      for (const Vec3& v : clipped) {
+        auto p = ProjectVertex(v);
+        if (!p.has_value()) {
+          return;
+        }
+        sv.push_back(*p);
+      }
+      for (std::size_t i = 1; i + 1 < sv.size(); ++i) {
+        if (backface_cull_ && IsBackface(sv[0], sv[i], sv[i + 1])) {
+          continue;
+        }
+        FillTriangleDepth(sv[0], sv[i], sv[i + 1], r, g, b);
+      }
+    }
+
+    void DrawTexturedQuadClipped(const Vec3& p0, const Vec3& p1, const Vec3& p2,
+                                 const Vec3& p3, double u0, double v0, double u1,
+                                 double v1, double u2, double v2, double u3,
+                                 double v3,
+                                 const GraphicsState::SpriteAsset& spr) {
+      std::vector<WorldVertexUv> poly = {
+          WorldVertexUv{p0, u0, v0}, WorldVertexUv{p1, u1, v1},
+          WorldVertexUv{p2, u2, v2}, WorldVertexUv{p3, u3, v3},
+      };
+      std::vector<WorldVertexUv> clipped = ClipPolygonNearUv(poly);
+      if (clipped.size() < 3) {
+        return;
+      }
+      std::vector<ScreenVertexUv> sv;
+      sv.reserve(clipped.size());
+      for (const WorldVertexUv& v : clipped) {
+        auto p = ProjectVertexUv(v.p, v.u, v.v);
+        if (!p.has_value()) {
+          return;
+        }
+        sv.push_back(*p);
+      }
+      for (std::size_t i = 1; i + 1 < sv.size(); ++i) {
+        if (backface_cull_) {
+          ScreenVertex a{sv[0].x, sv[0].y, sv[0].z};
+          ScreenVertex b{sv[i].x, sv[i].y, sv[i].z};
+          ScreenVertex c{sv[i + 1].x, sv[i + 1].y, sv[i + 1].z};
+          if (IsBackface(a, b, c)) {
+            continue;
+          }
+        }
+        FillTriangleDepthTextured(sv[0], sv[i], sv[i + 1], spr);
+      }
+    }
+
     static Vec3 RotateVec(Vec3 v, const Vec3& rot_deg) {
       const double rx = rot_deg.x * (3.14159265358979323846 / 180.0);
       const double ry = rot_deg.y * (3.14159265358979323846 / 180.0);
@@ -3535,10 +3718,10 @@ class VM {
             continue;
           }
 
-          const double z = w1 * a.z + w2 * b.z + w3 * c.z;
+          const double z = (w1 * a.z + w2 * b.z + w3 * c.z) + depth_bias_;
           const std::size_t idx =
               static_cast<std::size_t>(y * gfx_.Width() + x);
-          if (z <= depth_[idx]) {
+          if (z < (depth_[idx] - 1e-6)) {
             depth_[idx] = z;
             gfx_.PixelAtFast(x, y, r, g, bl);
           }
@@ -3585,10 +3768,10 @@ class VM {
             continue;
           }
 
-          const double z = w1 * a.z + w2 * b.z + w3 * c.z;
+          const double z = (w1 * a.z + w2 * b.z + w3 * c.z) + depth_bias_;
           const std::size_t idx =
               static_cast<std::size_t>(y * gfx_.Width() + x);
-          if (z > depth_[idx]) {
+          if (z >= (depth_[idx] - 1e-6)) {
             continue;
           }
 
@@ -3627,6 +3810,8 @@ class VM {
     double fov_ = 300.0;
     double near_clip_ = 1.0;
     double far_clip_ = 10000.0;
+    bool backface_cull_ = false;
+    double depth_bias_ = 0.0;
     std::vector<double> depth_;
     bool depth_dirty_ = true;
 
@@ -5191,6 +5376,18 @@ class VM {
       stack_.push_back(0);
       return;
     }
+    if (name == "gx3d.backface_cull") {
+      ExpectArgc(name, argc, 1);
+      gx3d_.BackfaceCull(ValueAsInt(args[0], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.depth_bias") {
+      ExpectArgc(name, argc, 1);
+      gx3d_.DepthBias(ValueAsInt(args[0], name));
+      stack_.push_back(0);
+      return;
+    }
     if (name == "gx3d.point") {
       ExpectArgc(name, argc, 6);
       gx3d_.Point(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
@@ -5349,6 +5546,44 @@ class VM {
       ExpectArgc(name, argc, 3);
       gx3d_.Grid(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
                  ValueAsInt(args[2], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.world_to_screen_x") {
+      ExpectArgc(name, argc, 3);
+      stack_.push_back(gx3d_.WorldToScreenX(ValueAsInt(args[0], name),
+                                            ValueAsInt(args[1], name),
+                                            ValueAsInt(args[2], name)));
+      return;
+    }
+    if (name == "gx3d.world_to_screen_y") {
+      ExpectArgc(name, argc, 3);
+      stack_.push_back(gx3d_.WorldToScreenY(ValueAsInt(args[0], name),
+                                            ValueAsInt(args[1], name),
+                                            ValueAsInt(args[2], name)));
+      return;
+    }
+    if (name == "gx3d.world_visible") {
+      ExpectArgc(name, argc, 3);
+      stack_.push_back(gx3d_.WorldVisible(ValueAsInt(args[0], name),
+                                          ValueAsInt(args[1], name),
+                                          ValueAsInt(args[2], name)));
+      return;
+    }
+    if (name == "gx3d.label") {
+      ExpectArgc(name, argc, 7);
+      std::string text_value;
+      if (std::holds_alternative<std::string>(args[3])) {
+        text_value = std::get<std::string>(args[3]);
+      } else if (std::holds_alternative<int>(args[3])) {
+        text_value = std::to_string(std::get<int>(args[3]));
+      } else {
+        throw std::runtime_error("gx3d.label expects text as string or int");
+      }
+      gx3d_.Label(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                  ValueAsInt(args[2], name), text_value,
+                  ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+                  ValueAsInt(args[6], name));
       stack_.push_back(0);
       return;
     }
@@ -6046,7 +6281,7 @@ int main(int argc, char** argv) {
 
     std::string cmd = argv[1];
     if (cmd == "version") {
-      std::cout << "pypp 0.7.4-cpp\n";
+      std::cout << "pypp 0.7.5-cpp\n";
       return 0;
     }
 
