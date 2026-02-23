@@ -29,6 +29,14 @@ It projects 3D primitives into the active `gfx` framebuffer/window with configur
   - Toggles backface culling for solid/textured polygon rendering
 - `gx3d.depth_bias(milli)`
   - Adds depth offset (`milli / 1000.0`) to reduce coplanar z-fighting
+- `gx3d.shader_set(mode, p1, p2, p3)`
+- `gx3d.shader_clear()`
+- `gx3d.shader_create()`
+- `gx3d.shader_program_clear(program_id)`
+- `gx3d.shader_add(program_id, mode, p1, p2, p3)`
+- `gx3d.shader_program_len(program_id)`
+- `gx3d.shader_use_program(program_id)`
+  - `gx3d` namespace access to post-processing shader pipeline
 - `gx3d.rotate(rx, ry, rz)`
   - Sets current object rotation in degrees
 - `gx3d.rotate_add(drx, dry, drz)`
@@ -73,6 +81,11 @@ It projects 3D primitives into the active `gfx` framebuffer/window with configur
   - Draws world axes
 - `gx3d.grid(size, step, y)`
   - Draws a ground grid plane
+- `gx3d.particles_spawn(x, y, z, count, speed, life, r, g, b)`
+  - Spawns particles at projected 3D world position
+- `gx3d.particles_update()`, `gx3d.particles_draw(size)`, `gx3d.particles_clear()`, `gx3d.particles_count()`
+- `gx3d.sprite_billboard(sprite_id, x, y, z, world_size, tr, tg, tb)`
+  - Draws camera-facing sprite in 3D space
 - `gx3d.world_to_screen_x(x, y, z)`
   - Returns projected screen x, or `-1` if not visible
 - `gx3d.world_to_screen_y(x, y, z)`

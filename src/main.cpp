@@ -2273,6 +2273,64 @@ struct GraphicsState {
       p.r = out;
       p.g = out;
       p.b = out;
+    } else if (mode == 11) {
+      // Minecraft-like voxel post shader:
+      // p1 block size 1..32, p2 color levels 2..32, p3 edge strength 0..255.
+      int block = p1;
+      if (block < 1) block = 1;
+      if (block > 32) block = 32;
+      int levels = p2;
+      if (levels < 2) levels = 2;
+      if (levels > 32) levels = 32;
+      const int edge_strength = std::max(0, std::min(255, p3));
+
+      const int bx = (x / block) * block;
+      const int by = (y / block) * block;
+      Pixel q = ReadPixelShaderSource(bx, by);
+
+      const int step = std::max(1, 255 / (levels - 1));
+      q.r = std::min(255, ((q.r + step / 2) / step) * step);
+      q.g = std::min(255, ((q.g + step / 2) / step) * step);
+      q.b = std::min(255, ((q.b + step / 2) / step) * step);
+
+      const Pixel l = ReadPixelShaderSource(x - 1, y);
+      const Pixel rpx = ReadPixelShaderSource(x + 1, y);
+      const Pixel u = ReadPixelShaderSource(x, y - 1);
+      const Pixel d = ReadPixelShaderSource(x, y + 1);
+      const int gx = std::abs(rpx.r - l.r) + std::abs(rpx.g - l.g) +
+                     std::abs(rpx.b - l.b);
+      const int gy = std::abs(d.r - u.r) + std::abs(d.g - u.g) +
+                     std::abs(d.b - u.b);
+      const int edge = std::min(255, (gx + gy) / 3);
+      const int dark = (edge * edge_strength) / 255;
+
+      p.r = (q.r * (255 - dark)) / 255;
+      p.g = (q.g * (255 - dark)) / 255;
+      p.b = (q.b * (255 - dark)) / 255;
+    } else if (mode == 12) {
+      // Bayer-style dither quantization:
+      // p1 strength 0..255, p2 levels 2..32.
+      const int strength = std::max(0, std::min(255, p1));
+      int levels = p2;
+      if (levels < 2) levels = 2;
+      if (levels > 32) levels = 32;
+      static const int bayer4[4][4] = {
+          {0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
+      const int t = bayer4[y & 3][x & 3];
+      const int bias = ((t - 7) * strength) / 16;
+
+      auto quant = [&](int c) {
+        int v = c + bias;
+        if (v < 0) v = 0;
+        if (v > 255) v = 255;
+        const int step = std::max(1, 255 / (levels - 1));
+        int out = ((v + step / 2) / step) * step;
+        if (out > 255) out = 255;
+        return out;
+      };
+      p.r = quant(p.r);
+      p.g = quant(p.g);
+      p.b = quant(p.b);
     }
     p.r = ClampColor(p.r);
     p.g = ClampColor(p.g);
@@ -2990,6 +3048,97 @@ class VM {
       }
       gfx_.Text(p->first, p->second, text, ClampColor(r), ClampColor(g),
                 ClampColor(b));
+    }
+
+    void ShaderSet(int mode, int p1, int p2, int p3) {
+      RequireGfx("gx3d.shader_set");
+      gfx_.ShaderSet(mode, p1, p2, p3);
+    }
+
+    void ShaderClear() {
+      RequireGfx("gx3d.shader_clear");
+      gfx_.ShaderClear();
+    }
+
+    int ShaderCreate() {
+      RequireGfx("gx3d.shader_create");
+      return gfx_.ShaderCreate();
+    }
+
+    void ShaderProgramClear(int program_id) {
+      RequireGfx("gx3d.shader_program_clear");
+      gfx_.ShaderProgramClear(program_id);
+    }
+
+    void ShaderAdd(int program_id, int mode, int p1, int p2, int p3) {
+      RequireGfx("gx3d.shader_add");
+      gfx_.ShaderAdd(program_id, mode, p1, p2, p3);
+    }
+
+    int ShaderProgramLen(int program_id) {
+      RequireGfx("gx3d.shader_program_len");
+      return gfx_.ShaderProgramLen(program_id);
+    }
+
+    void ShaderUseProgram(int program_id) {
+      RequireGfx("gx3d.shader_use_program");
+      gfx_.ShaderUseProgram(program_id);
+    }
+
+    void ParticlesSpawn(int x, int y, int z, int count, int speed, int life, int r,
+                        int g, int b) {
+      RequireGfx("gx3d.particles_spawn");
+      auto p = Project(ApplyTransform(Vec3{static_cast<double>(x),
+                                           static_cast<double>(y),
+                                           static_cast<double>(z)}));
+      if (!p.has_value()) {
+        return;
+      }
+      gfx_.ParticlesSpawn(p->first, p->second, count, speed, life, r, g, b);
+    }
+
+    void ParticlesUpdate() {
+      RequireGfx("gx3d.particles_update");
+      gfx_.ParticlesUpdate();
+    }
+
+    void ParticlesDraw(int size) {
+      RequireGfx("gx3d.particles_draw");
+      gfx_.ParticlesDraw(size);
+    }
+
+    void ParticlesClear() {
+      RequireGfx("gx3d.particles_clear");
+      gfx_.ParticlesClear();
+    }
+
+    int ParticlesCount() const {
+      return gfx_.ParticlesCount();
+    }
+
+    void SpriteBillboard(int sprite_id, int x, int y, int z, int world_size,
+                         int tint_r, int tint_g, int tint_b) {
+      RequireGfx("gx3d.sprite_billboard");
+      const GraphicsState::SpriteAsset& s =
+          gfx_.GetSpriteAsset(sprite_id, "gx3d.sprite_billboard");
+      Vec3 w = ApplyTransform(
+          Vec3{static_cast<double>(x), static_cast<double>(y), static_cast<double>(z)});
+      const double rel_x = w.x - cam_.x;
+      const double rel_y = w.y - cam_.y;
+      const double rel_z = w.z - cam_.z;
+      if (rel_z <= near_clip_ || rel_z >= far_clip_) {
+        return;
+      }
+      const double sx = (rel_x / rel_z) * fov_ + static_cast<double>(gfx_.Width()) / 2.0;
+      const double sy = (-rel_y / rel_z) * fov_ + static_cast<double>(gfx_.Height()) / 2.0;
+      int h = static_cast<int>(std::round((static_cast<double>(world_size) * fov_) / rel_z));
+      if (h < 1) {
+        return;
+      }
+      int wpx = std::max(1, (h * s.width) / std::max(1, s.height));
+      const int dx = static_cast<int>(std::round(sx)) - (wpx / 2);
+      const int dy = static_cast<int>(std::round(sy)) - (h / 2);
+      gfx_.DrawSpriteScaledTinted(sprite_id, dx, dy, wpx, h, tint_r, tint_g, tint_b);
     }
 
     void Point(int x, int y, int z, int r, int g, int b) {
@@ -5622,6 +5771,93 @@ class VM {
       stack_.push_back(0);
       return;
     }
+    if (name == "gx3d.shader_set") {
+      ExpectArgc(name, argc, 4);
+      gx3d_.ShaderSet(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                      ValueAsInt(args[2], name), ValueAsInt(args[3], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.shader_clear") {
+      ExpectArgc(name, argc, 0);
+      gx3d_.ShaderClear();
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.shader_create") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(gx3d_.ShaderCreate());
+      return;
+    }
+    if (name == "gx3d.shader_program_clear") {
+      ExpectArgc(name, argc, 1);
+      gx3d_.ShaderProgramClear(ValueAsInt(args[0], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.shader_add") {
+      ExpectArgc(name, argc, 5);
+      gx3d_.ShaderAdd(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                      ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+                      ValueAsInt(args[4], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.shader_program_len") {
+      ExpectArgc(name, argc, 1);
+      stack_.push_back(gx3d_.ShaderProgramLen(ValueAsInt(args[0], name)));
+      return;
+    }
+    if (name == "gx3d.shader_use_program") {
+      ExpectArgc(name, argc, 1);
+      gx3d_.ShaderUseProgram(ValueAsInt(args[0], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.particles_spawn") {
+      ExpectArgc(name, argc, 9);
+      gx3d_.ParticlesSpawn(
+          ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+          ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+          ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+          ValueAsInt(args[6], name), ValueAsInt(args[7], name),
+          ValueAsInt(args[8], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.particles_update") {
+      ExpectArgc(name, argc, 0);
+      gx3d_.ParticlesUpdate();
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.particles_draw") {
+      ExpectArgc(name, argc, 1);
+      gx3d_.ParticlesDraw(ValueAsInt(args[0], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.particles_clear") {
+      ExpectArgc(name, argc, 0);
+      gx3d_.ParticlesClear();
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.particles_count") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(gx3d_.ParticlesCount());
+      return;
+    }
+    if (name == "gx3d.sprite_billboard") {
+      ExpectArgc(name, argc, 8);
+      gx3d_.SpriteBillboard(
+          ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+          ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+          ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+          ValueAsInt(args[6], name), ValueAsInt(args[7], name));
+      stack_.push_back(0);
+      return;
+    }
 
     throw std::runtime_error("Unknown function: " + name);
   }
@@ -6332,7 +6568,7 @@ int main(int argc, char** argv) {
 
     std::string cmd = argv[1];
     if (cmd == "version") {
-      std::cout << "pypp 0.7.6-cpp\n";
+      std::cout << "pypp 0.8.0-cpp\n";
       return 0;
     }
 

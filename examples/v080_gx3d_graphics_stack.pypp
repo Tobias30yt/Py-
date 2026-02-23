@@ -1,0 +1,112 @@
+# title_image: assets/pypp_title.ppm
+gfx.window_ratio(1280, 720, 16, 9, "py++ v0.8.0 gx3d Graphics Stack")
+gfx.keep_aspect(1)
+gfx.refresh_rate(60)
+gfx.seed(8080)
+
+let spr = gfx.load_sprite("assets/tiles.ppm")
+
+gx3d.reset()
+gx3d.camera(0, 0, -520)
+gx3d.fov(420)
+gx3d.clip(4, 10000)
+gx3d.backface_cull(1)
+gx3d.depth_bias(0)
+
+let shader_prog = gx3d.shader_create()
+gx3d.shader_add(shader_prog, 11, 5, 10, 140)  # voxel/minecraft-ish
+gx3d.shader_add(shader_prog, 7, 70, 0, 0)     # vignette
+
+let angle = 0
+let use_prog = 1
+let use_single = 0
+let cull = 1
+
+while gfx.closed() == 0:
+  gfx.poll()
+
+  if gfx.key_down(27) == 1:
+    gfx.close()
+  end
+  if gfx.key_down(49) == 1:
+    let use_prog = 1
+    let use_single = 0
+  end
+  if gfx.key_down(50) == 1:
+    let use_prog = 0
+    let use_single = 1
+  end
+  if gfx.key_down(48) == 1:
+    let use_prog = 0
+    let use_single = 0
+  end
+  if gfx.key_down(67) == 1:
+    let cull = 1 - cull
+    gx3d.backface_cull(cull)
+    time.sleep_ms(100)
+  end
+
+  if gfx.key_down(87) == 1:
+    gx3d.camera_move(0, 0, 14)
+  end
+  if gfx.key_down(83) == 1:
+    gx3d.camera_move(0, 0, -14)
+  end
+  if gfx.key_down(65) == 1:
+    gx3d.camera_move(-10, 0, 0)
+  end
+  if gfx.key_down(68) == 1:
+    gx3d.camera_move(10, 0, 0)
+  end
+  if gfx.key_down(82) == 1:
+    gx3d.camera_move(0, 10, 0)
+  end
+  if gfx.key_down(70) == 1:
+    gx3d.camera_move(0, -10, 0)
+  end
+
+  let angle = angle + 2
+  gfx.clear(10, 14, 22)
+
+  if use_prog == 1:
+    gx3d.shader_use_program(shader_prog)
+  end
+  if use_single == 1:
+    gx3d.shader_set(12, 110, 10, 0)
+  end
+  if use_prog == 0:
+    if use_single == 0:
+      gx3d.shader_clear()
+    end
+  end
+
+  gx3d.rotate(angle / 3, angle, 0)
+  gx3d.translate(0, 0, 0)
+  gx3d.grid(1700, 90, -190)
+  gx3d.axis(220)
+
+  gx3d.cube_solid(0, 0, 320, 220, 220, 150, 110)
+  gx3d.cuboid_solid(-320, -20, 420, 180, 140, 120, 110, 180, 255)
+  gx3d.pyramid_solid(320, 0, 470, 190, 255, 170, 120)
+  gx3d.sphere(0, 210, 520, 100, 18, 170, 220, 255)
+  gx3d.sprite_billboard(spr, 0, -170, 420, 180, 255, 255, 255)
+  gx3d.label(0, -150, 320, "V0.8.0", 235, 240, 255)
+
+  if gfx.key_down(32) == 1:
+    gx3d.particles_spawn(0, 0, 320, 12, 10, 22, 255, 190, 110)
+  end
+  gx3d.particles_update()
+  gx3d.particles_draw(3)
+
+  gfx.text(18, 16, "v0.8.0 stack: 1=program 2=single 0=off C=cull SPACE=particles", 180, 220, 255)
+  gfx.text(18, 42, "CAM", 170, 210, 255)
+  gfx.text(58, 42, gx3d.camera_x(), 255, 220, 140)
+  gfx.text(114, 42, gx3d.camera_y(), 255, 220, 140)
+  gfx.text(170, 42, gx3d.camera_z(), 255, 220, 140)
+  gfx.text(226, 42, "PART", 170, 210, 255)
+  gfx.text(270, 42, gx3d.particles_count(), 255, 220, 140)
+  gfx.text(330, 42, "CULL", 170, 210, 255)
+  gfx.text(372, 42, cull, 255, 220, 140)
+
+  gfx.present()
+end

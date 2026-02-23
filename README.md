@@ -1,4 +1,4 @@
-# py++ (C++ edition) - Update 0.7.6
+# py++ (C++ edition) - Update 0.8.0
 
 `py++` ist jetzt komplett in C++ umgesetzt (kein Python-Compiler mehr im Projekt).
 Die Syntax bleibt python-aehnlich, aber bewusst minimal.
@@ -112,7 +112,7 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gfx.anim_length(anim_id)`
   - `gfx.anim_draw(anim_id, tick, x, y)`
   - `gfx.anim_draw_scaled(anim_id, tick, x, y, w, h)`
-  - `gfx.shader_set(mode, p1, p2, p3)` (`1` grayscale, `2` scanline, `3` wave, `4` invert, `5` posterize, `6` rgb-split, `7` vignette, `8` edge, `9` pixelate, `10` threshold)
+  - `gfx.shader_set(mode, p1, p2, p3)` (`1` grayscale, `2` scanline, `3` wave, `4` invert, `5` posterize, `6` rgb-split, `7` vignette, `8` edge, `9` pixelate, `10` threshold, `11` voxel/minecraft-style, `12` bayer-dither)
   - `gfx.shader_clear()`
   - `gfx.shader_create()`
   - `gfx.shader_program_clear(program_id)`
@@ -150,6 +150,13 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gx3d.clip(near, far)`
   - `gx3d.backface_cull(0|1)` (solid face culling toggle)
   - `gx3d.depth_bias(milli)` (z-fighting tuning)
+  - `gx3d.shader_set(mode, p1, p2, p3)`
+  - `gx3d.shader_clear()`
+  - `gx3d.shader_create()`
+  - `gx3d.shader_program_clear(program_id)`
+  - `gx3d.shader_add(program_id, mode, p1, p2, p3)`
+  - `gx3d.shader_program_len(program_id)`
+  - `gx3d.shader_use_program(program_id)`
   - `gx3d.rotate(rx, ry, rz)`
   - `gx3d.rotate_add(drx, dry, drz)`
   - `gx3d.translate(x, y, z)`
@@ -172,6 +179,12 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gx3d.cuboid_sprite(x, y, z, sx, sy, sz, sprite_id)`
   - `gx3d.axis(length)`
   - `gx3d.grid(size, step, y)`
+  - `gx3d.particles_spawn(x, y, z, count, speed, life, r, g, b)` (3D projected particle spawn)
+  - `gx3d.particles_update()`
+  - `gx3d.particles_draw(size)`
+  - `gx3d.particles_clear()`
+  - `gx3d.particles_count()`
+  - `gx3d.sprite_billboard(sprite_id, x, y, z, world_size, tr, tg, tb)`
   - `gx3d.world_to_screen_x(x, y, z)`
   - `gx3d.world_to_screen_y(x, y, z)`
   - `gx3d.world_visible(x, y, z)` (`0|1`)
@@ -233,6 +246,7 @@ Hinweis:
 .\build\pypp.exe run examples\gx3d_test.pypp
 .\build\pypp.exe run examples\gx3d_stability_demo.pypp
 .\build\pypp.exe run examples\testprogram.pypp
+.\build\pypp.exe run examples\v080_gx3d_graphics_stack.pypp
 .\build\pypp.exe run examples\multiplayer_test.pypp
 .\build\pypp.exe run examples\random_noise.pypp
 .\build\pypp.exe run examples\torch_demo.pypp
@@ -253,7 +267,7 @@ import config as c
 print(c.width)
 ```
 
-Hinweis: Klassen/Funktionen als eigene User-Definitionen sind fuer den naechsten Sprachschritt vorgesehen. `0.7.6` liefert das aktuelle Alias-Import-Fundament plus Collision-Helper.
+Hinweis: Klassen/Funktionen als eigene User-Definitionen sind fuer den naechsten Sprachschritt vorgesehen. `0.8.0` liefert das aktuelle Alias-Import-Fundament plus Collision-Helper.
 
 ## pypp global in PATH
 
@@ -300,8 +314,8 @@ git add .
 git commit -m "Add release workflow"
 git push
 
-git tag v0.7.6
-git push origin v0.7.6
+git tag v0.8.0
+git push origin v0.8.0
 ```
 
 ## VS Code Extension (Language Support)

@@ -95,7 +95,7 @@ Prints runtime/compiler version.
 - `gfx.particles_count()`
 - `gfx.shake(intensity, frames)`
 - `gfx.nine_patch(id, sx, sy, sw, sh, border, dx, dy, dw, dh)`
-- `gfx.shader_set(mode, p1, p2, p3)` (`1` grayscale, `2` scanline, `3` wave, `4` invert, `5` posterize, `6` rgb-split, `7` vignette, `8` edge, `9` pixelate, `10` threshold)
+- `gfx.shader_set(mode, p1, p2, p3)` (`1` grayscale, `2` scanline, `3` wave, `4` invert, `5` posterize, `6` rgb-split, `7` vignette, `8` edge, `9` pixelate, `10` threshold, `11` voxel/minecraft-style, `12` bayer-dither)
 - `gfx.shader_clear()`
 - `gfx.shader_create()`
 - `gfx.shader_program_clear(program_id)`
@@ -265,6 +265,13 @@ High-use `gx3d` calls:
 - `gx3d.clip(near, far)`
 - `gx3d.backface_cull(0|1)`
 - `gx3d.depth_bias(milli)`
+- `gx3d.shader_set(mode, p1, p2, p3)`
+- `gx3d.shader_clear()`
+- `gx3d.shader_create()`
+- `gx3d.shader_program_clear(program_id)`
+- `gx3d.shader_add(program_id, mode, p1, p2, p3)`
+- `gx3d.shader_program_len(program_id)`
+- `gx3d.shader_use_program(program_id)`
 - `gx3d.fov(fov)`
 - `gx3d.rotate(rx, ry, rz)`
 - `gx3d.rotate_add(drx, dry, drz)`
@@ -277,6 +284,9 @@ High-use `gx3d` calls:
 - `gx3d.cuboid_solid(...)`
 - `gx3d.axis(len)`
 - `gx3d.grid(size, step, y)`
+- `gx3d.particles_spawn(x, y, z, count, speed, life, r, g, b)`
+- `gx3d.particles_update()`, `gx3d.particles_draw(size)`, `gx3d.particles_clear()`, `gx3d.particles_count()`
+- `gx3d.sprite_billboard(sprite_id, x, y, z, world_size, tr, tg, tb)`
 - `gx3d.world_to_screen_x(x, y, z)`
 - `gx3d.world_to_screen_y(x, y, z)`
 - `gx3d.world_visible(x, y, z)`
