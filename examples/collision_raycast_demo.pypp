@@ -1,0 +1,103 @@
+# title_image: assets/pypp_title.ppm
+gfx.window_ratio(960, 540, 16, 9, "py++ Collision Raycast Demo")
+gfx.keep_aspect(1)
+gfx.refresh_rate(60)
+
+let px = 130
+let py = 270
+
+let rx = 430
+let ry = 190
+let rw = 240
+let rh = 150
+
+let cx = 760
+let cy = 290
+let cr = 80
+
+while gfx.closed() == 0:
+  gfx.poll()
+  if gfx.key_down(27) == 1:
+    gfx.close()
+  end
+
+  if gfx.key_down(65) == 1:
+    let px = px - 4
+  end
+  if gfx.key_down(68) == 1:
+    let px = px + 4
+  end
+  if gfx.key_down(87) == 1:
+    let py = py - 4
+  end
+  if gfx.key_down(83) == 1:
+    let py = py + 4
+  end
+
+  let mx = gfx.mouse_x()
+  let my = gfx.mouse_y()
+
+  let hit_rect = collision.segment_rect(px, py, mx, my, rx, ry, rw, rh)
+  let hit_circle = collision.segment_circle(px, py, mx, my, cx, cy, cr)
+  let mouse_in_circle = collision.point_in_circle(mx, my, cx, cy, cr)
+
+  gfx.clear(14, 16, 24)
+  gfx.gradient_rect(0, 0, 960, 540, 26, 34, 48, 8, 10, 16, 1)
+
+  gfx.text(20, 16, "RAYCAST / SEGMENT COLLISION", 190, 230, 255)
+  gfx.text(20, 44, "WASD move ray origin, mouse controls target, ESC quit", 170, 205, 235)
+
+  if hit_rect == 1:
+    gfx.rect(rx, ry, rw, rh, 255, 120, 120)
+  end
+  if hit_rect == 0:
+    gfx.rect(rx, ry, rw, rh, 90, 140, 255)
+  end
+  gfx.rect_outline(rx, ry, rw, rh, 255, 255, 255)
+
+  if hit_circle == 1:
+    gfx.circle(cx, cy, cr, 255, 200, 110)
+  end
+  if hit_circle == 0:
+    gfx.circle(cx, cy, cr, 110, 230, 180)
+  end
+  gfx.circle_outline(cx, cy, cr, 2, 255, 255, 255)
+
+  if hit_rect == 1:
+    gfx.line_thick(px, py, mx, my, 3, 255, 120, 120)
+  end
+  if hit_rect == 0:
+    if hit_circle == 1:
+      gfx.line_thick(px, py, mx, my, 3, 255, 210, 120)
+    end
+    if hit_circle == 0:
+      gfx.line_thick(px, py, mx, my, 3, 160, 220, 255)
+    end
+  end
+
+  gfx.circle(px, py, 6, 255, 255, 255)
+  gfx.circle(mx, my, 4, 230, 240, 255)
+
+  if mouse_in_circle == 1:
+    gfx.text(20, 78, "MOUSE IN CIRCLE", 255, 220, 130)
+  end
+  if mouse_in_circle == 0:
+    gfx.text(20, 78, "MOUSE OUTSIDE CIRCLE", 150, 210, 255)
+  end
+
+  if hit_rect == 1:
+    gfx.text(20, 104, "segment_rect: HIT", 255, 130, 130)
+  end
+  if hit_rect == 0:
+    gfx.text(20, 104, "segment_rect: NO HIT", 150, 210, 255)
+  end
+
+  if hit_circle == 1:
+    gfx.text(20, 130, "segment_circle: HIT", 255, 200, 130)
+  end
+  if hit_circle == 0:
+    gfx.text(20, 130, "segment_circle: NO HIT", 150, 210, 255)
+  end
+
+  gfx.present()
+end

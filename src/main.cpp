@@ -4385,6 +4385,88 @@ class VM {
           NoiseFractal2(x, y, scale, octaves, persistence_pct));
       return;
     }
+    if (name == "collision.aabb") {
+      ExpectArgc(name, argc, 8);
+      const int ax = ValueAsInt(args[0], name);
+      const int ay = ValueAsInt(args[1], name);
+      const int aw = ValueAsInt(args[2], name);
+      const int ah = ValueAsInt(args[3], name);
+      const int bx = ValueAsInt(args[4], name);
+      const int by = ValueAsInt(args[5], name);
+      const int bw = ValueAsInt(args[6], name);
+      const int bh = ValueAsInt(args[7], name);
+      stack_.push_back(CollisionAabb(ax, ay, aw, ah, bx, by, bw, bh));
+      return;
+    }
+    if (name == "collision.point_in_rect") {
+      ExpectArgc(name, argc, 6);
+      const int px = ValueAsInt(args[0], name);
+      const int py = ValueAsInt(args[1], name);
+      const int rx = ValueAsInt(args[2], name);
+      const int ry = ValueAsInt(args[3], name);
+      const int rw = ValueAsInt(args[4], name);
+      const int rh = ValueAsInt(args[5], name);
+      stack_.push_back(CollisionPointInRect(px, py, rx, ry, rw, rh));
+      return;
+    }
+    if (name == "collision.circle") {
+      ExpectArgc(name, argc, 6);
+      const int ax = ValueAsInt(args[0], name);
+      const int ay = ValueAsInt(args[1], name);
+      const int ar = ValueAsInt(args[2], name);
+      const int bx = ValueAsInt(args[3], name);
+      const int by = ValueAsInt(args[4], name);
+      const int br = ValueAsInt(args[5], name);
+      stack_.push_back(CollisionCircle(ax, ay, ar, bx, by, br));
+      return;
+    }
+    if (name == "collision.circle_rect") {
+      ExpectArgc(name, argc, 7);
+      const int cx = ValueAsInt(args[0], name);
+      const int cy = ValueAsInt(args[1], name);
+      const int cr = ValueAsInt(args[2], name);
+      const int rx = ValueAsInt(args[3], name);
+      const int ry = ValueAsInt(args[4], name);
+      const int rw = ValueAsInt(args[5], name);
+      const int rh = ValueAsInt(args[6], name);
+      stack_.push_back(CollisionCircleRect(cx, cy, cr, rx, ry, rw, rh));
+      return;
+    }
+    if (name == "collision.point_in_circle") {
+      ExpectArgc(name, argc, 5);
+      const int px = ValueAsInt(args[0], name);
+      const int py = ValueAsInt(args[1], name);
+      const int cx = ValueAsInt(args[2], name);
+      const int cy = ValueAsInt(args[3], name);
+      const int cr = ValueAsInt(args[4], name);
+      stack_.push_back(CollisionPointInCircle(px, py, cx, cy, cr));
+      return;
+    }
+    if (name == "collision.segment_rect") {
+      ExpectArgc(name, argc, 8);
+      const int x1 = ValueAsInt(args[0], name);
+      const int y1 = ValueAsInt(args[1], name);
+      const int x2 = ValueAsInt(args[2], name);
+      const int y2 = ValueAsInt(args[3], name);
+      const int rx = ValueAsInt(args[4], name);
+      const int ry = ValueAsInt(args[5], name);
+      const int rw = ValueAsInt(args[6], name);
+      const int rh = ValueAsInt(args[7], name);
+      stack_.push_back(CollisionSegmentRect(x1, y1, x2, y2, rx, ry, rw, rh));
+      return;
+    }
+    if (name == "collision.segment_circle") {
+      ExpectArgc(name, argc, 7);
+      const int x1 = ValueAsInt(args[0], name);
+      const int y1 = ValueAsInt(args[1], name);
+      const int x2 = ValueAsInt(args[2], name);
+      const int y2 = ValueAsInt(args[3], name);
+      const int cx = ValueAsInt(args[4], name);
+      const int cy = ValueAsInt(args[5], name);
+      const int cr = ValueAsInt(args[6], name);
+      stack_.push_back(CollisionSegmentCircle(x1, y1, x2, y2, cx, cy, cr));
+      return;
+    }
     if (name == "net.host") {
       ExpectArgc(name, argc, 1);
       net_.Host(ValueAsInt(args[0], name));
@@ -5489,6 +5571,183 @@ class VM {
     return static_cast<int>(std::round(t * 1000000.0));
   }
 
+  static int CollisionAabb(int ax, int ay, int aw, int ah, int bx, int by,
+                           int bw, int bh) {
+    if (aw < 0) {
+      ax += aw;
+      aw = -aw;
+    }
+    if (ah < 0) {
+      ay += ah;
+      ah = -ah;
+    }
+    if (bw < 0) {
+      bx += bw;
+      bw = -bw;
+    }
+    if (bh < 0) {
+      by += bh;
+      bh = -bh;
+    }
+    const long long ar = static_cast<long long>(ax) + static_cast<long long>(aw);
+    const long long ab = static_cast<long long>(ay) + static_cast<long long>(ah);
+    const long long br = static_cast<long long>(bx) + static_cast<long long>(bw);
+    const long long bb = static_cast<long long>(by) + static_cast<long long>(bh);
+    const bool overlap = static_cast<long long>(ax) < br &&
+                         static_cast<long long>(bx) < ar &&
+                         static_cast<long long>(ay) < bb &&
+                         static_cast<long long>(by) < ab;
+    return overlap ? 1 : 0;
+  }
+
+  static int CollisionPointInRect(int px, int py, int rx, int ry, int rw, int rh) {
+    if (rw < 0) {
+      rx += rw;
+      rw = -rw;
+    }
+    if (rh < 0) {
+      ry += rh;
+      rh = -rh;
+    }
+    const long long rr = static_cast<long long>(rx) + static_cast<long long>(rw);
+    const long long rb = static_cast<long long>(ry) + static_cast<long long>(rh);
+    const bool inside = static_cast<long long>(px) >= static_cast<long long>(rx) &&
+                        static_cast<long long>(px) < rr &&
+                        static_cast<long long>(py) >= static_cast<long long>(ry) &&
+                        static_cast<long long>(py) < rb;
+    return inside ? 1 : 0;
+  }
+
+  static int CollisionCircle(int ax, int ay, int ar, int bx, int by, int br) {
+    const long long dx = static_cast<long long>(ax) - static_cast<long long>(bx);
+    const long long dy = static_cast<long long>(ay) - static_cast<long long>(by);
+    const long long rs = static_cast<long long>(std::max(0, ar)) +
+                         static_cast<long long>(std::max(0, br));
+    const long long d2 = dx * dx + dy * dy;
+    return d2 <= rs * rs ? 1 : 0;
+  }
+
+  static int CollisionCircleRect(int cx, int cy, int cr, int rx, int ry, int rw,
+                                 int rh) {
+    if (rw < 0) {
+      rx += rw;
+      rw = -rw;
+    }
+    if (rh < 0) {
+      ry += rh;
+      rh = -rh;
+    }
+    const long long rxl = rx;
+    const long long ryt = ry;
+    const long long rxr = static_cast<long long>(rx) + static_cast<long long>(rw);
+    const long long ryb = static_cast<long long>(ry) + static_cast<long long>(rh);
+    long long nearest_x = cx;
+    long long nearest_y = cy;
+    if (nearest_x < rxl) {
+      nearest_x = rxl;
+    }
+    if (nearest_x > rxr) {
+      nearest_x = rxr;
+    }
+    if (nearest_y < ryt) {
+      nearest_y = ryt;
+    }
+    if (nearest_y > ryb) {
+      nearest_y = ryb;
+    }
+    const long long dx = static_cast<long long>(cx) - nearest_x;
+    const long long dy = static_cast<long long>(cy) - nearest_y;
+    const long long rr = static_cast<long long>(std::max(0, cr));
+    return (dx * dx + dy * dy) <= rr * rr ? 1 : 0;
+  }
+
+  static int CollisionPointInCircle(int px, int py, int cx, int cy, int cr) {
+    const long long dx = static_cast<long long>(px) - static_cast<long long>(cx);
+    const long long dy = static_cast<long long>(py) - static_cast<long long>(cy);
+    const long long rr = static_cast<long long>(std::max(0, cr));
+    return (dx * dx + dy * dy) <= rr * rr ? 1 : 0;
+  }
+
+  static int CollisionSegmentRect(int x1, int y1, int x2, int y2, int rx, int ry,
+                                  int rw, int rh) {
+    if (rw < 0) {
+      rx += rw;
+      rw = -rw;
+    }
+    if (rh < 0) {
+      ry += rh;
+      rh = -rh;
+    }
+    const double xmin = static_cast<double>(rx);
+    const double ymin = static_cast<double>(ry);
+    const double xmax = static_cast<double>(rx) + static_cast<double>(rw);
+    const double ymax = static_cast<double>(ry) + static_cast<double>(rh);
+    const double x1d = static_cast<double>(x1);
+    const double y1d = static_cast<double>(y1);
+    const double x2d = static_cast<double>(x2);
+    const double y2d = static_cast<double>(y2);
+    const double dx = x2d - x1d;
+    const double dy = y2d - y1d;
+
+    double t0 = 0.0;
+    double t1 = 1.0;
+    auto clip = [&](double p, double q) -> bool {
+      if (std::abs(p) < 1e-12) {
+        return q >= 0.0;
+      }
+      const double r = q / p;
+      if (p < 0.0) {
+        if (r > t1) {
+          return false;
+        }
+        if (r > t0) {
+          t0 = r;
+        }
+      } else {
+        if (r < t0) {
+          return false;
+        }
+        if (r < t1) {
+          t1 = r;
+        }
+      }
+      return true;
+    };
+
+    const bool ok = clip(-dx, x1d - xmin) && clip(dx, xmax - x1d) &&
+                    clip(-dy, y1d - ymin) && clip(dy, ymax - y1d);
+    return ok ? 1 : 0;
+  }
+
+  static int CollisionSegmentCircle(int x1, int y1, int x2, int y2, int cx, int cy,
+                                    int cr) {
+    const double x1d = static_cast<double>(x1);
+    const double y1d = static_cast<double>(y1);
+    const double x2d = static_cast<double>(x2);
+    const double y2d = static_cast<double>(y2);
+    const double cxd = static_cast<double>(cx);
+    const double cyd = static_cast<double>(cy);
+    const double r = static_cast<double>(std::max(0, cr));
+    const double dx = x2d - x1d;
+    const double dy = y2d - y1d;
+    const double len2 = dx * dx + dy * dy;
+    double t = 0.0;
+    if (len2 > 1e-12) {
+      t = ((cxd - x1d) * dx + (cyd - y1d) * dy) / len2;
+      if (t < 0.0) {
+        t = 0.0;
+      }
+      if (t > 1.0) {
+        t = 1.0;
+      }
+    }
+    const double nx = x1d + t * dx;
+    const double ny = y1d + t * dy;
+    const double ddx = cxd - nx;
+    const double ddy = cyd - ny;
+    return (ddx * ddx + ddy * ddy) <= (r * r) ? 1 : 0;
+  }
+
   static void ExpectArgc(const std::string& name, int argc, int expected) {
     if (argc != expected) {
       throw std::runtime_error(name + " expects " + std::to_string(expected) +
@@ -5787,7 +6046,7 @@ int main(int argc, char** argv) {
 
     std::string cmd = argv[1];
     if (cmd == "version") {
-      std::cout << "pypp 0.4.0-cpp\n";
+      std::cout << "pypp 0.7.4-cpp\n";
       return 0;
     }
 

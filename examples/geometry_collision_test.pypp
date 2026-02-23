@@ -1,0 +1,147 @@
+# title_image: assets/pypp_title.ppm
+gfx.window_ratio(960, 540, 16, 9, "py++ Collision + Geometry Test")
+gfx.keep_aspect(1)
+gfx.refresh_rate(60)
+
+let ax = 140
+let ay = 150
+let aw = 240
+let ah = 150
+
+let bx = 480
+let by = 210
+let bw = 220
+let bh = 140
+
+let cx = 320
+let cy = 380
+let cr = 56
+
+let ox = 700
+let oy = 140
+let orad = 52
+
+while gfx.closed() == 0:
+  gfx.poll()
+
+  if gfx.key_down(27) == 1:
+    gfx.close()
+  end
+
+  # Move rect A (WASD)
+  if gfx.key_down(65) == 1:
+    let ax = ax - 4
+  end
+  if gfx.key_down(68) == 1:
+    let ax = ax + 4
+  end
+  if gfx.key_down(87) == 1:
+    let ay = ay - 4
+  end
+  if gfx.key_down(83) == 1:
+    let ay = ay + 4
+  end
+
+  # Move rect B (IJKL)
+  if gfx.key_down(74) == 1:
+    let bx = bx - 4
+  end
+  if gfx.key_down(76) == 1:
+    let bx = bx + 4
+  end
+  if gfx.key_down(73) == 1:
+    let by = by - 4
+  end
+  if gfx.key_down(75) == 1:
+    let by = by + 4
+  end
+
+  # Move circle (arrow keys)
+  if gfx.key_down(37) == 1:
+    let cx = cx - 4
+  end
+  if gfx.key_down(39) == 1:
+    let cx = cx + 4
+  end
+  if gfx.key_down(38) == 1:
+    let cy = cy - 4
+  end
+  if gfx.key_down(40) == 1:
+    let cy = cy + 4
+  end
+
+  let mouse_x = gfx.mouse_x()
+  let mouse_y = gfx.mouse_y()
+
+  let hit_rect_rect = collision.aabb(ax, ay, aw, ah, bx, by, bw, bh)
+  let hit_circle_rect = collision.circle_rect(cx, cy, cr, ax, ay, aw, ah)
+  let hit_circle_circle = collision.circle(cx, cy, cr, ox, oy, orad)
+  let mouse_in_a = collision.point_in_rect(mouse_x, mouse_y, ax, ay, aw, ah)
+
+  gfx.clear(14, 18, 28)
+  gfx.gradient_rect(0, 0, 960, 540, 18, 26, 44, 8, 10, 16, 1)
+
+  gfx.text(24, 16, "COLLISION TESTBED", 180, 230, 255)
+  gfx.text(24, 42, "WASD: Rect A  |  IJKL: Rect B  |  Arrows: Circle  |  ESC: Quit", 180, 210, 230)
+
+  if hit_rect_rect == 1:
+    gfx.text(24, 72, "AABB: HIT", 255, 120, 120)
+  end
+  if hit_rect_rect == 0:
+    gfx.text(24, 72, "AABB: NO HIT", 140, 210, 255)
+  end
+
+  if hit_circle_rect == 1:
+    gfx.text(210, 72, "CIRCLE/RECT: HIT", 255, 170, 120)
+  end
+  if hit_circle_rect == 0:
+    gfx.text(210, 72, "CIRCLE/RECT: NO HIT", 140, 210, 255)
+  end
+
+  if hit_circle_circle == 1:
+    gfx.text(462, 72, "CIRCLE/CIRCLE: HIT", 255, 210, 120)
+  end
+  if hit_circle_circle == 0:
+    gfx.text(462, 72, "CIRCLE/CIRCLE: NO HIT", 140, 210, 255)
+  end
+
+  if mouse_in_a == 1:
+    gfx.text(730, 72, "MOUSE IN A", 255, 220, 140)
+  end
+  if mouse_in_a == 0:
+    gfx.text(730, 72, "MOUSE OUT", 140, 210, 255)
+  end
+
+  if hit_rect_rect == 1:
+    gfx.rect(ax, ay, aw, ah, 255, 90, 90)
+    gfx.rect(bx, by, bw, bh, 255, 120, 120)
+  end
+  if hit_rect_rect == 0:
+    gfx.rect(ax, ay, aw, ah, 70, 180, 255)
+    gfx.rect(bx, by, bw, bh, 110, 120, 255)
+  end
+
+  gfx.rect_outline(ax, ay, aw, ah, 255, 255, 255)
+  gfx.rect_outline(bx, by, bw, bh, 255, 255, 255)
+
+  if hit_circle_rect == 1:
+    gfx.circle(cx, cy, cr, 255, 200, 90)
+  end
+  if hit_circle_rect == 0:
+    gfx.circle(cx, cy, cr, 110, 255, 170)
+  end
+
+  if hit_circle_circle == 1:
+    gfx.circle(ox, oy, orad, 255, 140, 200)
+  end
+  if hit_circle_circle == 0:
+    gfx.circle(ox, oy, orad, 170, 120, 255)
+  end
+
+  gfx.circle_outline(cx, cy, cr, 2, 255, 255, 255)
+  gfx.circle_outline(ox, oy, orad, 2, 255, 255, 255)
+
+  gfx.circle(mouse_x, mouse_y, 4, 255, 255, 255)
+
+  gfx.present()
+end

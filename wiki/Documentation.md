@@ -135,6 +135,16 @@ Prints runtime/compiler version.
 - `noise.smooth2(x, y, scale)`
 - `noise.fractal2(x, y, scale, octaves, persistence_pct)`
 
+### `collision` geometry helpers
+
+- `collision.aabb(ax, ay, aw, ah, bx, by, bw, bh)` returns `1` if overlap else `0`
+- `collision.point_in_rect(px, py, rx, ry, rw, rh)` returns `1` if inside else `0`
+- `collision.circle(ax, ay, ar, bx, by, br)` returns `1` if overlap else `0`
+- `collision.circle_rect(cx, cy, cr, rx, ry, rw, rh)` returns `1` if overlap else `0`
+- `collision.point_in_circle(px, py, cx, cy, r)` returns `1` if inside else `0`
+- `collision.segment_rect(x1, y1, x2, y2, rx, ry, rw, rh)` returns `1` if segment intersects rect
+- `collision.segment_circle(x1, y1, x2, y2, cx, cy, r)` returns `1` if segment intersects circle
+
 ### `math` / `numpy` list + numeric utilities
 
 - `math.array(...)` / `numpy.array(...)`

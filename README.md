@@ -1,4 +1,4 @@
-# py++ (C++ edition) - Update 0.4.0 (Graphics Update)
+# py++ (C++ edition) - Update 0.7.4
 
 `py++` ist jetzt komplett in C++ umgesetzt (kein Python-Compiler mehr im Projekt).
 Die Syntax bleibt python-aehnlich, aber bewusst minimal.
@@ -27,6 +27,13 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `noise.value2(x, y)`, `noise.value3(x, y, z)` (`0..255`)
   - `noise.smooth2(x, y, scale)` (`0..255`)
   - `noise.fractal2(x, y, scale, octaves, persistence_pct)` (`0..255`)
+  - `collision.aabb(ax, ay, aw, ah, bx, by, bw, bh)` (`0|1`)
+  - `collision.point_in_rect(px, py, rx, ry, rw, rh)` (`0|1`)
+  - `collision.circle(ax, ay, ar, bx, by, br)` (`0|1`)
+  - `collision.circle_rect(cx, cy, cr, rx, ry, rw, rh)` (`0|1`)
+  - `collision.point_in_circle(px, py, cx, cy, r)` (`0|1`)
+  - `collision.segment_rect(x1, y1, x2, y2, rx, ry, rw, rh)` (`0|1`)
+  - `collision.segment_circle(x1, y1, x2, y2, cx, cy, r)` (`0|1`)
 - Built-in Multiplayer-Netzwerk (`net`, UDP, Windows/Linux):
   - `net.host(port)`
   - `net.join("127.0.0.1", port)`
@@ -214,6 +221,8 @@ Hinweis:
 .\build\pypp.exe run examples\random_noise.pypp
 .\build\pypp.exe run examples\torch_demo.pypp
 .\build\pypp.exe run examples\math_numpy_demo.pypp
+.\build\pypp.exe run examples\geometry_collision_test.pypp
+.\build\pypp.exe run examples\collision_raycast_demo.pypp
 .\build\pypp.exe run projects\mini_minecraft\main.pypp
 ```
 
@@ -228,7 +237,7 @@ import config as c
 print(c.width)
 ```
 
-Hinweis: Klassen/Funktionen als eigene User-Definitionen sind fuer den naechsten Sprachschritt vorgesehen. `0.4.0` liefert das Alias-Import-Fundament.
+Hinweis: Klassen/Funktionen als eigene User-Definitionen sind fuer den naechsten Sprachschritt vorgesehen. `0.7.4` liefert das aktuelle Alias-Import-Fundament plus Collision-Helper.
 
 ## pypp global in PATH
 
@@ -275,8 +284,8 @@ git add .
 git commit -m "Add release workflow"
 git push
 
-git tag v0.4.0
-git push origin v0.4.0
+git tag v0.7.4
+git push origin v0.7.4
 ```
 
 ## VS Code Extension (Language Support)
