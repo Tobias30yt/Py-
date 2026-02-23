@@ -31,16 +31,16 @@ Build and package script as executable:
 The repo includes:
 - `.github/workflows/release.yml`
 
-It builds on Windows and uploads release assets (`pypp.exe`, zip) for tags like `v0.8.0`.
+It builds on Windows and uploads release assets (`pypp.exe`, zip) for tags like `v0.8.1`.
 
 Tag flow:
 
 ```powershell
 git add .
-git commit -m "Release 0.8.0"
+git commit -m "Release 0.8.1"
 git push
-git tag v0.8.0
-git push origin v0.8.0
+git tag v0.8.1
+git push origin v0.8.1
 ```
 
 ## VS Code Extension

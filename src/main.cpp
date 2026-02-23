@@ -2331,6 +2331,79 @@ struct GraphicsState {
       p.r = quant(p.r);
       p.g = quant(p.g);
       p.b = quant(p.b);
+    } else if (mode == 13) {
+      // CRT-like effect:
+      // p1 curvature 0..200, p2 scanline darken 0..255, p3 chroma offset 0..8.
+      const int curvature = std::max(0, std::min(200, p1));
+      const int scan_dark = std::max(0, std::min(255, p2));
+      const int chroma = std::max(0, std::min(8, p3));
+
+      const double cx = static_cast<double>(width) * 0.5;
+      const double cy = static_cast<double>(height) * 0.5;
+      const double nx = (static_cast<double>(x) - cx) / std::max(1.0, cx);
+      const double ny = (static_cast<double>(y) - cy) / std::max(1.0, cy);
+      const double d2 = nx * nx + ny * ny;
+
+      const int warp_x = static_cast<int>(
+          std::round(nx * d2 * (static_cast<double>(curvature) * 0.35)));
+      const int warp_y = static_cast<int>(
+          std::round(ny * d2 * (static_cast<double>(curvature) * 0.35)));
+
+      const Pixel pr = ReadPixelShaderSource(x + warp_x - chroma, y + warp_y);
+      const Pixel pg = ReadPixelShaderSource(x + warp_x, y + warp_y);
+      const Pixel pb = ReadPixelShaderSource(x + warp_x + chroma, y + warp_y);
+      p.r = pr.r;
+      p.g = pg.g;
+      p.b = pb.b;
+
+      if (((y + present_frame) & 1) != 0) {
+        p.r = (p.r * (255 - scan_dark)) / 255;
+        p.g = (p.g * (255 - scan_dark)) / 255;
+        p.b = (p.b * (255 - scan_dark)) / 255;
+      }
+
+      int vignette = static_cast<int>(std::round(d2 * 140.0));
+      if (vignette > 200) vignette = 200;
+      if (vignette < 0) vignette = 0;
+      p.r = (p.r * (255 - vignette)) / 255;
+      p.g = (p.g * (255 - vignette)) / 255;
+      p.b = (p.b * (255 - vignette)) / 255;
+    } else if (mode == 14) {
+      // Bloom-lite:
+      // p1 threshold 0..255, p2 radius 1..4, p3 intensity 0..255.
+      const int threshold = std::max(0, std::min(255, p1));
+      int radius = p2;
+      if (radius < 1) radius = 1;
+      if (radius > 4) radius = 4;
+      const int intensity = std::max(0, std::min(255, p3));
+
+      int acc_r = 0;
+      int acc_g = 0;
+      int acc_b = 0;
+      int acc_n = 0;
+      for (int oy = -radius; oy <= radius; ++oy) {
+        for (int ox = -radius; ox <= radius; ++ox) {
+          const Pixel s = ReadPixelShaderSource(x + ox, y + oy);
+          const int lum = (s.r * 30 + s.g * 59 + s.b * 11) / 100;
+          if (lum < threshold) {
+            continue;
+          }
+          const int dist = std::abs(ox) + std::abs(oy);
+          const int w = std::max(1, (radius + 1) - dist);
+          acc_r += s.r * w;
+          acc_g += s.g * w;
+          acc_b += s.b * w;
+          acc_n += w;
+        }
+      }
+      if (acc_n > 0) {
+        const int br = acc_r / acc_n;
+        const int bg = acc_g / acc_n;
+        const int bb = acc_b / acc_n;
+        p.r = ClampColor(p.r + (br * intensity) / 255);
+        p.g = ClampColor(p.g + (bg * intensity) / 255);
+        p.b = ClampColor(p.b + (bb * intensity) / 255);
+      }
     }
     p.r = ClampColor(p.r);
     p.g = ClampColor(p.g);
@@ -6568,7 +6641,7 @@ int main(int argc, char** argv) {
 
     std::string cmd = argv[1];
     if (cmd == "version") {
-      std::cout << "pypp 0.8.0-cpp\n";
+      std::cout << "pypp 0.8.1-cpp\n";
       return 0;
     }
 

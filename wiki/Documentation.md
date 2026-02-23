@@ -95,7 +95,7 @@ Prints runtime/compiler version.
 - `gfx.particles_count()`
 - `gfx.shake(intensity, frames)`
 - `gfx.nine_patch(id, sx, sy, sw, sh, border, dx, dy, dw, dh)`
-- `gfx.shader_set(mode, p1, p2, p3)` (`1` grayscale, `2` scanline, `3` wave, `4` invert, `5` posterize, `6` rgb-split, `7` vignette, `8` edge, `9` pixelate, `10` threshold, `11` voxel/minecraft-style, `12` bayer-dither)
+- `gfx.shader_set(mode, p1, p2, p3)` (`1` grayscale, `2` scanline, `3` wave, `4` invert, `5` posterize, `6` rgb-split, `7` vignette, `8` edge, `9` pixelate, `10` threshold, `11` voxel/minecraft-style, `12` bayer-dither, `13` crt, `14` bloom-lite)
 - `gfx.shader_clear()`
 - `gfx.shader_create()`
 - `gfx.shader_program_clear(program_id)`

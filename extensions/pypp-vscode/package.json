@@ -2,7 +2,7 @@
   "name": "pypp-language-support",
   "displayName": "py++ Language Support",
   "description": "Syntax highlighting and snippets for py++ (.pypp).",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "publisher": "tobias30yt",
   "engines": {
     "vscode": "^1.85.0"
