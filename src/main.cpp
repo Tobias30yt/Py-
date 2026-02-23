@@ -1377,6 +1377,12 @@ struct GraphicsState {
 
   int LoadSprite(const std::string& path) {
 #ifdef _WIN32
+    SpriteAsset sprite;
+    if (TryLoadP3Ppm(path, sprite)) {
+      sprites.push_back(std::move(sprite));
+      return static_cast<int>(sprites.size() - 1);
+    }
+
     (void)GetGdiPlusRuntime();
     std::filesystem::path p(path);
     std::wstring wp = p.wstring();
@@ -1391,7 +1397,6 @@ struct GraphicsState {
       throw std::runtime_error("gfx.load_sprite invalid image size: " + path);
     }
 
-    SpriteAsset sprite;
     sprite.width = w;
     sprite.height = h;
     sprite.texels.resize(static_cast<std::size_t>(w * h));
@@ -2000,6 +2005,88 @@ struct GraphicsState {
                                std::to_string(sprite_id));
     }
     return sprites[static_cast<std::size_t>(sprite_id)];
+  }
+
+  static bool TryLoadP3Ppm(const std::string& path, SpriteAsset& out) {
+    std::ifstream in(path);
+    if (!in) {
+      return false;
+    }
+
+    auto next_token = [&in]() -> std::optional<std::string> {
+      std::string tok;
+      while (in >> tok) {
+        if (!tok.empty() && tok[0] == '#') {
+          std::string rest;
+          std::getline(in, rest);
+          continue;
+        }
+        return tok;
+      }
+      return std::nullopt;
+    };
+
+    auto magic = next_token();
+    if (!magic.has_value() || magic.value() != "P3") {
+      return false;
+    }
+    auto w_tok = next_token();
+    auto h_tok = next_token();
+    auto max_tok = next_token();
+    if (!w_tok.has_value() || !h_tok.has_value() || !max_tok.has_value()) {
+      return false;
+    }
+
+    int w = 0;
+    int h = 0;
+    int maxv = 0;
+    try {
+      w = std::stoi(w_tok.value());
+      h = std::stoi(h_tok.value());
+      maxv = std::stoi(max_tok.value());
+    } catch (...) {
+      return false;
+    }
+    if (w <= 0 || h <= 0 || maxv <= 0) {
+      return false;
+    }
+
+    out.width = w;
+    out.height = h;
+    out.texels.assign(static_cast<std::size_t>(w * h), SpriteTexel{});
+    for (int i = 0; i < w * h; ++i) {
+      auto r_tok = next_token();
+      auto g_tok = next_token();
+      auto b_tok = next_token();
+      if (!r_tok.has_value() || !g_tok.has_value() || !b_tok.has_value()) {
+        return false;
+      }
+      int r = 0;
+      int g = 0;
+      int b = 0;
+      try {
+        r = std::stoi(r_tok.value());
+        g = std::stoi(g_tok.value());
+        b = std::stoi(b_tok.value());
+      } catch (...) {
+        return false;
+      }
+      r = std::max(0, std::min(maxv, r));
+      g = std::max(0, std::min(maxv, g));
+      b = std::max(0, std::min(maxv, b));
+      if (maxv != 255) {
+        r = (r * 255) / maxv;
+        g = (g * 255) / maxv;
+        b = (b * 255) / maxv;
+      }
+      SpriteTexel t;
+      t.r = static_cast<std::uint8_t>(r);
+      t.g = static_cast<std::uint8_t>(g);
+      t.b = static_cast<std::uint8_t>(b);
+      t.a = 255;
+      out.texels[static_cast<std::size_t>(i)] = t;
+    }
+    return true;
   }
 
   Tilemap2D& GetTilemap(int map_id, const std::string& fn) {
