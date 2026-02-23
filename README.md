@@ -68,6 +68,8 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gfx.keep_aspect(0|1)`
   - `gfx.refresh_rate(hz)` (`0` disables pacing)
   - `gfx.seed(seed)`
+  - `gfx.camera2d_set(x, y)`, `gfx.camera2d_move(dx, dy)`
+  - `gfx.camera2d_x()`, `gfx.camera2d_y()`, `gfx.camera2d_reset()`
   - `gfx.poll()`
   - `gfx.present()`
   - `gfx.sync()` (manual frame pacing call)
@@ -85,6 +87,11 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gfx.draw_sprite_tinted(id, x, y, tr, tg, tb)`
   - `gfx.draw_sprite_scaled_tinted(id, x, y, w, h, tr, tg, tb)`
   - `gfx.draw_sprite_rotated(id, x, y, angle_deg, scale1000, tr, tg, tb)`
+  - `gfx.tilemap_create(cols, rows, tile_w, tile_h)`
+  - `gfx.tilemap_set(map_id, x, y, tile_id)`, `gfx.tilemap_get(map_id, x, y)`
+  - `gfx.tilemap_fill(map_id, tile_id)`
+  - `gfx.tilemap_width(map_id)`, `gfx.tilemap_height(map_id)`
+  - `gfx.tilemap_draw(map_id, sprite_id, tiles_per_row, src_w, src_h, dx, dy)`
   - `gfx.particles_spawn(x, y, count, speed, life, r, g, b)`
   - `gfx.particles_update()`
   - `gfx.particles_draw(size)`
@@ -122,6 +129,9 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gfx.save("build/frame.ppm")`
   - `gfx.save_frame("build/pong", frame)`
   - `time.sleep_ms(ms)`
+- Built-in Audio-Library:
+  - `audio.play_wav("assets/sound.wav", loop)`
+  - `audio.stop()`
 - Built-in 3D-Library (`gx3d`, wireframe + solids):
   - `gx3d.reset()`
   - `gx3d.camera(x, y, z)`

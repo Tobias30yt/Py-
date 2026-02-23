@@ -57,6 +57,8 @@ Prints runtime/compiler version.
 - `gfx.keep_aspect(enabled)`
 - `gfx.refresh_rate(hz)` (`0` disables pacing)
 - `gfx.seed(seed)`
+- `gfx.camera2d_set(x, y)`, `gfx.camera2d_move(dx, dy)`
+- `gfx.camera2d_x()`, `gfx.camera2d_y()`, `gfx.camera2d_reset()`
 - `gfx.sync()` (manual frame pacing call)
 - `gfx.mouse_x()`, `gfx.mouse_y()`
 - `gfx.mouse_down(button)`
@@ -81,6 +83,11 @@ Prints runtime/compiler version.
 - `gfx.draw_sprite_tinted(id, x, y, tr, tg, tb)`
 - `gfx.draw_sprite_scaled_tinted(id, x, y, w, h, tr, tg, tb)`
 - `gfx.draw_sprite_rotated(id, x, y, angle_deg, scale1000, tr, tg, tb)`
+- `gfx.tilemap_create(cols, rows, tile_w, tile_h)`
+- `gfx.tilemap_set(map_id, x, y, tile_id)`, `gfx.tilemap_get(map_id, x, y)`
+- `gfx.tilemap_fill(map_id, tile_id)`
+- `gfx.tilemap_width(map_id)`, `gfx.tilemap_height(map_id)`
+- `gfx.tilemap_draw(map_id, sprite_id, tiles_per_row, src_w, src_h, dx, dy)`
 - `gfx.particles_spawn(x, y, count, speed, life, r, g, b)`
 - `gfx.particles_update()`
 - `gfx.particles_draw(size)`
@@ -97,6 +104,11 @@ Prints runtime/compiler version.
 - `gfx.shader_use_program(program_id)`
 
 ### `gx3d` additions
+
+### `audio` additions
+
+- `audio.play_wav("assets/sound.wav", loop)`
+- `audio.stop()`
 
 - `gx3d.cube_sprite(x, y, z, size, sprite_id)`
 - `gx3d.cuboid_sprite(x, y, z, sx, sy, sz, sprite_id)`

@@ -1,0 +1,76 @@
+gfx.window_ratio(960, 540, 16, 9, "py++ 0.7.1 Tilemap Demo")
+gfx.keep_aspect(1)
+gfx.refresh_rate(60)
+gfx.seed(71)
+
+let sprite = gfx.load_sprite("assets/tiles.ppm")
+let map = gfx.tilemap_create(48, 28, 32, 32)
+
+let y = 0
+while y < gfx.tilemap_height(map):
+  let x = 0
+  while x < gfx.tilemap_width(map):
+    if y > 20:
+      gfx.tilemap_set(map, x, y, 1)
+    end
+    if y == 20:
+      gfx.tilemap_set(map, x, y, 0)
+    end
+    if y == 19:
+      if random.chance(15) == 1:
+        gfx.tilemap_set(map, x, y, 2)
+      end
+    end
+    let x = x + 1
+  end
+  let y = y + 1
+end
+
+let tick = 0
+while gfx.closed() == 0:
+  gfx.poll()
+  if gfx.key_down(27) == 1:
+    gfx.close()
+  end
+
+  if gfx.key_down(65) == 1:
+    gfx.camera2d_move(-6, 0)
+  end
+  if gfx.key_down(68) == 1:
+    gfx.camera2d_move(6, 0)
+  end
+  if gfx.key_down(87) == 1:
+    gfx.camera2d_move(0, -6)
+  end
+  if gfx.key_down(83) == 1:
+    gfx.camera2d_move(0, 6)
+  end
+  if gfx.key_down(82) == 1:
+    gfx.camera2d_reset()
+  end
+
+  if gfx.mouse_down(0) == 1:
+    gfx.particles_spawn(gfx.mouse_x() + gfx.camera2d_x(), gfx.mouse_y() + gfx.camera2d_y(), 10, 22, 48, 255, 220, 140)
+    gfx.shake(2, 3)
+  end
+
+  gfx.particles_update()
+
+  gfx.clear(14, 20, 32)
+  gfx.gradient_rect(0, 0, 960, 180, 24, 36, 58, 48, 72, 110, 1)
+
+  gfx.tilemap_draw(map, sprite, 4, 16, 16, 0, 0)
+  gfx.particles_draw(2)
+
+  gfx.rounded_rect(16, 16, 420, 92, 16, 26, 38, 58)
+  gfx.text_scaled(28, 28, "PY++ 0.7.1 TILEMAP", 2, 220, 240, 255)
+  gfx.text(28, 54, "WASD MOVE CAM, R RESET, LMB FX", 180, 220, 255)
+  gfx.text(28, 70, "CAM:", 220, 240, 255)
+  gfx.text(58, 70, gfx.camera2d_x(), 220, 255, 180)
+  gfx.text(96, 70, gfx.camera2d_y(), 220, 255, 180)
+  gfx.text(152, 70, "P:", 220, 240, 255)
+  gfx.text(168, 70, gfx.particles_count(), 220, 255, 180)
+
+  gfx.present()
+  let tick = tick + 1
+end

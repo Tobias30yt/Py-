@@ -31,8 +31,10 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
+#include <mmsystem.h>
 #include <objidl.h>
 #include <gdiplus.h>
+#pragma comment(lib, "Winmm.lib")
 #else
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -679,6 +681,14 @@ struct GraphicsState {
     std::vector<SpriteTexel> texels;
   };
   std::vector<SpriteAsset> sprites;
+  struct Tilemap2D {
+    int cols = 0;
+    int rows = 0;
+    int tile_w = 0;
+    int tile_h = 0;
+    std::vector<int> tiles;
+  };
+  std::vector<Tilemap2D> tilemaps;
   struct Particle {
     double x = 0.0;
     double y = 0.0;
@@ -735,6 +745,8 @@ struct GraphicsState {
   int present_frame = 0;
   int shake_intensity = 0;
   int shake_frames = 0;
+  int camera2d_x = 0;
+  int camera2d_y = 0;
   std::mt19937 gfx_rng{1337u};
   int refresh_rate_hz = 0;
   std::chrono::steady_clock::time_point next_frame_time{};
@@ -756,8 +768,11 @@ struct GraphicsState {
     shader_p3 = 0;
     shader_program_active = -1;
     particles.clear();
+    tilemaps.clear();
     shake_intensity = 0;
     shake_frames = 0;
+    camera2d_x = 0;
+    camera2d_y = 0;
   }
 
   void Clear(int r, int g, int b) {
@@ -1045,6 +1060,125 @@ struct GraphicsState {
 
   void Seed(int seed) { gfx_rng.seed(static_cast<std::uint32_t>(seed)); }
 
+  void Camera2dSet(int x, int y) {
+    camera2d_x = x;
+    camera2d_y = y;
+  }
+
+  void Camera2dMove(int dx, int dy) {
+    camera2d_x += dx;
+    camera2d_y += dy;
+  }
+
+  int Camera2dX() const { return camera2d_x; }
+
+  int Camera2dY() const { return camera2d_y; }
+
+  void Camera2dReset() {
+    camera2d_x = 0;
+    camera2d_y = 0;
+  }
+
+  int TilemapCreate(int cols, int rows, int tile_w, int tile_h) {
+    EnsureOpen("gfx.tilemap_create");
+    if (cols <= 0 || rows <= 0 || tile_w <= 0 || tile_h <= 0) {
+      throw std::runtime_error(
+          "gfx.tilemap_create expects positive cols/rows/tile size");
+    }
+    Tilemap2D map;
+    map.cols = cols;
+    map.rows = rows;
+    map.tile_w = tile_w;
+    map.tile_h = tile_h;
+    map.tiles.assign(static_cast<std::size_t>(cols * rows), -1);
+    tilemaps.push_back(std::move(map));
+    return static_cast<int>(tilemaps.size() - 1);
+  }
+
+  void TilemapSet(int map_id, int x, int y, int tile_id) {
+    EnsureOpen("gfx.tilemap_set");
+    Tilemap2D& map = GetTilemap(map_id, "gfx.tilemap_set");
+    if (x < 0 || y < 0 || x >= map.cols || y >= map.rows) {
+      return;
+    }
+    map.tiles[static_cast<std::size_t>(y * map.cols + x)] = tile_id;
+  }
+
+  int TilemapGet(int map_id, int x, int y) const {
+    const Tilemap2D& map = GetTilemapConst(map_id, "gfx.tilemap_get");
+    if (x < 0 || y < 0 || x >= map.cols || y >= map.rows) {
+      return -1;
+    }
+    return map.tiles[static_cast<std::size_t>(y * map.cols + x)];
+  }
+
+  void TilemapFill(int map_id, int tile_id) {
+    Tilemap2D& map = GetTilemap(map_id, "gfx.tilemap_fill");
+    std::fill(map.tiles.begin(), map.tiles.end(), tile_id);
+  }
+
+  int TilemapWidth(int map_id) const {
+    const Tilemap2D& map = GetTilemapConst(map_id, "gfx.tilemap_width");
+    return map.cols;
+  }
+
+  int TilemapHeight(int map_id) const {
+    const Tilemap2D& map = GetTilemapConst(map_id, "gfx.tilemap_height");
+    return map.rows;
+  }
+
+  void TilemapDraw(int map_id, int sprite_id, int tiles_per_row, int src_w,
+                   int src_h, int dst_x, int dst_y) {
+    EnsureOpen("gfx.tilemap_draw");
+    if (tiles_per_row <= 0 || src_w <= 0 || src_h <= 0) {
+      throw std::runtime_error(
+          "gfx.tilemap_draw expects tiles_per_row/src_w/src_h > 0");
+    }
+    Tilemap2D& map = GetTilemap(map_id, "gfx.tilemap_draw");
+    (void)GetSprite(sprite_id, "gfx.tilemap_draw");
+
+    for (int y = 0; y < map.rows; ++y) {
+      for (int x = 0; x < map.cols; ++x) {
+        const int tile_id =
+            map.tiles[static_cast<std::size_t>(y * map.cols + x)];
+        if (tile_id < 0) {
+          continue;
+        }
+        const int tx = tile_id % tiles_per_row;
+        const int ty = tile_id / tiles_per_row;
+        const int sx = tx * src_w;
+        const int sy = ty * src_h;
+        const int px = dst_x + x * map.tile_w;
+        const int py = dst_y + y * map.tile_h;
+        DrawSpriteRegionScaled(sprite_id, sx, sy, src_w, src_h, px, py,
+                               map.tile_w, map.tile_h);
+      }
+    }
+  }
+
+  int AudioPlayWav(const std::string& path, int loop_flag) {
+#ifdef _WIN32
+    std::filesystem::path p(path);
+    std::wstring wp = p.wstring();
+    DWORD flags = SND_FILENAME | SND_ASYNC;
+    if (loop_flag != 0) {
+      flags |= SND_LOOP;
+    }
+    BOOL ok = PlaySoundW(wp.c_str(), nullptr, flags);
+    return ok ? 1 : 0;
+#else
+    (void)path;
+    (void)loop_flag;
+    throw std::runtime_error("audio.play_wav is currently Windows-only");
+#endif
+  }
+
+  void AudioStop() {
+#ifdef _WIN32
+    PlaySoundW(nullptr, nullptr, 0);
+#endif
+  }
+
   void OpenWindow(int w, int h, const std::string& title) {
     Open(w, h);
 #ifdef _WIN32
@@ -1290,7 +1424,7 @@ struct GraphicsState {
   void DrawSprite(int sprite_id, int x, int y) {
     EnsureOpen("gfx.draw_sprite");
     const SpriteAsset& s = GetSprite(sprite_id, "gfx.draw_sprite");
-    BlitSprite(s, x, y, s.width, s.height);
+    BlitSprite(s, CameraX(x), CameraY(y), s.width, s.height);
   }
 
   void DrawSpriteScaled(int sprite_id, int x, int y, int w, int h) {
@@ -1299,14 +1433,15 @@ struct GraphicsState {
       return;
     }
     const SpriteAsset& s = GetSprite(sprite_id, "gfx.draw_sprite_scaled");
-    BlitSprite(s, x, y, w, h);
+    BlitSprite(s, CameraX(x), CameraY(y), w, h);
   }
 
   void DrawSpriteTinted(int sprite_id, int x, int y, int tint_r, int tint_g,
                         int tint_b) {
     EnsureOpen("gfx.draw_sprite_tinted");
     const SpriteAsset& s = GetSprite(sprite_id, "gfx.draw_sprite_tinted");
-    BlitSpriteTinted(s, x, y, s.width, s.height, tint_r, tint_g, tint_b);
+    BlitSpriteTinted(s, CameraX(x), CameraY(y), s.width, s.height, tint_r, tint_g,
+                     tint_b);
   }
 
   void DrawSpriteScaledTinted(int sprite_id, int x, int y, int w, int h,
@@ -1316,7 +1451,7 @@ struct GraphicsState {
       return;
     }
     const SpriteAsset& s = GetSprite(sprite_id, "gfx.draw_sprite_scaled_tinted");
-    BlitSpriteTinted(s, x, y, w, h, tint_r, tint_g, tint_b);
+    BlitSpriteTinted(s, CameraX(x), CameraY(y), w, h, tint_r, tint_g, tint_b);
   }
 
   void DrawSpriteRegionScaled(int sprite_id, int src_x, int src_y, int src_w,
@@ -1326,6 +1461,8 @@ struct GraphicsState {
     if (src_w <= 0 || src_h <= 0 || dst_w <= 0 || dst_h <= 0) {
       return;
     }
+    const int draw_x = CameraX(dst_x);
+    const int draw_y = CameraY(dst_y);
     const SpriteAsset& s = GetSprite(sprite_id, "gfx.draw_sprite_region");
     for (int yy = 0; yy < dst_h; ++yy) {
       const int sy = src_y + ((yy * src_h) / dst_h);
@@ -1339,8 +1476,8 @@ struct GraphicsState {
         if (t.a == 0) {
           continue;
         }
-        const int tx = dst_x + xx;
-        const int ty = dst_y + yy;
+        const int tx = draw_x + xx;
+        const int ty = draw_y + yy;
         if (tx < 0 || ty < 0 || tx >= width || ty >= height) {
           continue;
         }
@@ -1482,6 +1619,8 @@ struct GraphicsState {
     const int tr = ClampColor(tint_r);
     const int tg = ClampColor(tint_g);
     const int tb = ClampColor(tint_b);
+    const int draw_x = CameraX(x);
+    const int draw_y = CameraY(y);
 
     for (int yy = 0; yy < th; ++yy) {
       for (int xx = 0; xx < tw; ++xx) {
@@ -1501,8 +1640,8 @@ struct GraphicsState {
         if (t.a == 0) {
           continue;
         }
-        const int tx = x + xx;
-        const int ty = y + yy;
+        const int tx = draw_x + xx;
+        const int ty = draw_y + yy;
         if (tx < 0 || ty < 0 || tx >= width || ty >= height) {
           continue;
         }
@@ -1842,6 +1981,10 @@ struct GraphicsState {
     }
   }
 
+  int CameraX(int x) const { return x - camera2d_x; }
+
+  int CameraY(int y) const { return y - camera2d_y; }
+
   static int ClampColor(int v) { return std::max(0, std::min(255, v)); }
 
   void SetPixelRaw(int x, int y, const Pixel& pixel) {
@@ -1857,6 +2000,22 @@ struct GraphicsState {
                                std::to_string(sprite_id));
     }
     return sprites[static_cast<std::size_t>(sprite_id)];
+  }
+
+  Tilemap2D& GetTilemap(int map_id, const std::string& fn) {
+    if (map_id < 0 || static_cast<std::size_t>(map_id) >= tilemaps.size()) {
+      throw std::runtime_error(fn + ": invalid tilemap id " +
+                               std::to_string(map_id));
+    }
+    return tilemaps[static_cast<std::size_t>(map_id)];
+  }
+
+  const Tilemap2D& GetTilemapConst(int map_id, const std::string& fn) const {
+    if (map_id < 0 || static_cast<std::size_t>(map_id) >= tilemaps.size()) {
+      throw std::runtime_error(fn + ": invalid tilemap id " +
+                               std::to_string(map_id));
+    }
+    return tilemaps[static_cast<std::size_t>(map_id)];
   }
 
   void BlitSprite(const SpriteAsset& s, int dst_x, int dst_y, int dst_w,
@@ -4398,6 +4557,34 @@ class VM {
       stack_.push_back(0);
       return;
     }
+    if (name == "gfx.camera2d_set") {
+      ExpectArgc(name, argc, 2);
+      gfx_.Camera2dSet(ValueAsInt(args[0], name), ValueAsInt(args[1], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.camera2d_move") {
+      ExpectArgc(name, argc, 2);
+      gfx_.Camera2dMove(ValueAsInt(args[0], name), ValueAsInt(args[1], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.camera2d_x") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(gfx_.Camera2dX());
+      return;
+    }
+    if (name == "gfx.camera2d_y") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(gfx_.Camera2dY());
+      return;
+    }
+    if (name == "gfx.camera2d_reset") {
+      ExpectArgc(name, argc, 0);
+      gfx_.Camera2dReset();
+      stack_.push_back(0);
+      return;
+    }
     if (name == "gfx.poll") {
       ExpectArgc(name, argc, 0);
       stack_.push_back(gfx_.PollEvents());
@@ -4525,6 +4712,52 @@ class VM {
           ValueAsInt(args[2], name), ValueAsInt(args[3], name),
           ValueAsInt(args[4], name), ValueAsInt(args[5], name),
           ValueAsInt(args[6], name), ValueAsInt(args[7], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.tilemap_create") {
+      ExpectArgc(name, argc, 4);
+      stack_.push_back(gfx_.TilemapCreate(
+          ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+          ValueAsInt(args[2], name), ValueAsInt(args[3], name)));
+      return;
+    }
+    if (name == "gfx.tilemap_set") {
+      ExpectArgc(name, argc, 4);
+      gfx_.TilemapSet(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                      ValueAsInt(args[2], name), ValueAsInt(args[3], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.tilemap_get") {
+      ExpectArgc(name, argc, 3);
+      stack_.push_back(gfx_.TilemapGet(ValueAsInt(args[0], name),
+                                       ValueAsInt(args[1], name),
+                                       ValueAsInt(args[2], name)));
+      return;
+    }
+    if (name == "gfx.tilemap_fill") {
+      ExpectArgc(name, argc, 2);
+      gfx_.TilemapFill(ValueAsInt(args[0], name), ValueAsInt(args[1], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.tilemap_width") {
+      ExpectArgc(name, argc, 1);
+      stack_.push_back(gfx_.TilemapWidth(ValueAsInt(args[0], name)));
+      return;
+    }
+    if (name == "gfx.tilemap_height") {
+      ExpectArgc(name, argc, 1);
+      stack_.push_back(gfx_.TilemapHeight(ValueAsInt(args[0], name)));
+      return;
+    }
+    if (name == "gfx.tilemap_draw") {
+      ExpectArgc(name, argc, 7);
+      gfx_.TilemapDraw(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                       ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+                       ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+                       ValueAsInt(args[6], name));
       stack_.push_back(0);
       return;
     }
@@ -4704,6 +4937,22 @@ class VM {
         ms = 0;
       }
       std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "audio.play_wav") {
+      ExpectArgc(name, argc, 2);
+      if (!std::holds_alternative<std::string>(args[0])) {
+        throw std::runtime_error("audio.play_wav expects (path, loop)");
+      }
+      stack_.push_back(
+          gfx_.AudioPlayWav(std::get<std::string>(args[0]),
+                            ValueAsInt(args[1], name)));
+      return;
+    }
+    if (name == "audio.stop") {
+      ExpectArgc(name, argc, 0);
+      gfx_.AudioStop();
       stack_.push_back(0);
       return;
     }
