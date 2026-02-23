@@ -69,12 +69,14 @@ Prints runtime/compiler version.
 - `gfx.triangle(x1, y1, x2, y2, x3, y3, r, g, b)` (filled)
 - `gfx.circle_outline(x, y, radius, thickness, r, g, b)`
 - `gfx.gradient_rect(x, y, w, h, r1, g1, b1, r2, g2, b2, vertical)`
+- `gfx.rounded_rect(x, y, w, h, radius, r, g, b)`
 - `gfx.frame()` (presented frame count)
 - `gfx.anim_register(first_sprite, frame_count, frame_ticks, mode)` (`0` once, `1` loop, `2` ping-pong)
 - `gfx.anim_frame(anim_id, tick)`
 - `gfx.anim_length(anim_id)`
 - `gfx.anim_draw(anim_id, tick, x, y)`
 - `gfx.anim_draw_scaled(anim_id, tick, x, y, w, h)`
+- `gfx.draw_sprite_region(id, sx, sy, sw, sh, dx, dy, dw, dh)`
 - `gfx.shader_set(mode, p1, p2, p3)` (`1` grayscale, `2` scanline, `3` wave, `4` invert, `5` posterize, `6` rgb-split, `7` vignette, `8` edge, `9` pixelate)
 - `gfx.shader_clear()`
 - `gfx.shader_create()`

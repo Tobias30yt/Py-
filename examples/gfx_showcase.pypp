@@ -1,0 +1,28 @@
+gfx.window_ratio(960, 540, 16, 9, "py++ GFX Showcase")
+gfx.keep_aspect(1)
+gfx.refresh_rate(60)
+
+let t = 0
+
+while gfx.closed() == 0:
+  gfx.poll()
+  if gfx.key_down(27) == 1:
+    gfx.close()
+  end
+
+  gfx.clear(12, 16, 26)
+  gfx.gradient_rect(0, 0, 960, 180, 18, 28, 48, 36, 50, 80, 1)
+  gfx.rounded_rect(40, 60, 360, 120, 18, 40, 68, 120)
+  gfx.rounded_rect(48, 68, 344, 104, 14, 22, 36, 62)
+  gfx.text_scaled(64, 86, "GFX SHOWCASE", 2, 220, 240, 255)
+
+  gfx.line_thick(460, 90, 900, 200, 6, 130, 220, 255)
+  gfx.triangle(520, 240, 900, 320, 640, 500, 255, 140, 90)
+  gfx.circle_outline(810, 110, 48, 8, 180, 240, 255)
+
+  gfx.text(30, 500, "FRAME:", 220, 240, 255)
+  gfx.text(72, 500, gfx.frame(), 220, 255, 180)
+
+  gfx.present()
+  let t = t + 1
+end

@@ -807,6 +807,49 @@ struct GraphicsState {
     }
   }
 
+  void RoundedRect(int x, int y, int w, int h, int radius, int r, int g, int b) {
+    EnsureOpen("gfx.rounded_rect");
+    if (w <= 0 || h <= 0) {
+      return;
+    }
+    if (radius <= 0) {
+      Rect(x, y, w, h, r, g, b);
+      return;
+    }
+    radius = std::min(radius, std::min(w / 2, h / 2));
+    Pixel color{ClampColor(r), ClampColor(g), ClampColor(b)};
+
+    for (int yy = y + radius; yy < y + h - radius; ++yy) {
+      for (int xx = x; xx < x + w; ++xx) {
+        SetPixelRaw(xx, yy, color);
+      }
+    }
+    for (int yy = y; yy < y + radius; ++yy) {
+      for (int xx = x + radius; xx < x + w - radius; ++xx) {
+        SetPixelRaw(xx, yy, color);
+      }
+    }
+    for (int yy = y + h - radius; yy < y + h; ++yy) {
+      for (int xx = x + radius; xx < x + w - radius; ++xx) {
+        SetPixelRaw(xx, yy, color);
+      }
+    }
+
+    const int rr = radius * radius;
+    for (int oy = 0; oy < radius; ++oy) {
+      for (int ox = 0; ox < radius; ++ox) {
+        const int dx = radius - 1 - ox;
+        const int dy = radius - 1 - oy;
+        if ((dx * dx + dy * dy) <= rr) {
+          SetPixelRaw(x + ox, y + oy, color);
+          SetPixelRaw(x + w - radius + ox, y + oy, color);
+          SetPixelRaw(x + ox, y + h - radius + oy, color);
+          SetPixelRaw(x + w - radius + ox, y + h - radius + oy, color);
+        }
+      }
+    }
+  }
+
   void RectOutline(int x, int y, int w, int h, int r, int g, int b) {
     EnsureOpen("gfx.rect_outline");
     if (w <= 0 || h <= 0) {
@@ -1236,6 +1279,45 @@ struct GraphicsState {
     }
     const SpriteAsset& s = GetSprite(sprite_id, "gfx.draw_sprite_scaled");
     BlitSprite(s, x, y, w, h);
+  }
+
+  void DrawSpriteRegionScaled(int sprite_id, int src_x, int src_y, int src_w,
+                              int src_h, int dst_x, int dst_y, int dst_w,
+                              int dst_h) {
+    EnsureOpen("gfx.draw_sprite_region");
+    if (src_w <= 0 || src_h <= 0 || dst_w <= 0 || dst_h <= 0) {
+      return;
+    }
+    const SpriteAsset& s = GetSprite(sprite_id, "gfx.draw_sprite_region");
+    for (int yy = 0; yy < dst_h; ++yy) {
+      const int sy = src_y + ((yy * src_h) / dst_h);
+      for (int xx = 0; xx < dst_w; ++xx) {
+        const int sx = src_x + ((xx * src_w) / dst_w);
+        if (sx < 0 || sy < 0 || sx >= s.width || sy >= s.height) {
+          continue;
+        }
+        const SpriteTexel& t =
+            s.texels[static_cast<std::size_t>(sy * s.width + sx)];
+        if (t.a == 0) {
+          continue;
+        }
+        const int tx = dst_x + xx;
+        const int ty = dst_y + yy;
+        if (tx < 0 || ty < 0 || tx >= width || ty >= height) {
+          continue;
+        }
+        Pixel& out = pixels[static_cast<std::size_t>(ty * width + tx)];
+        if (t.a == 255) {
+          out = Pixel{static_cast<int>(t.r), static_cast<int>(t.g),
+                      static_cast<int>(t.b)};
+        } else {
+          const int a = static_cast<int>(t.a);
+          out.r = (static_cast<int>(t.r) * a + out.r * (255 - a)) / 255;
+          out.g = (static_cast<int>(t.g) * a + out.g * (255 - a)) / 255;
+          out.b = (static_cast<int>(t.b) * a + out.b * (255 - a)) / 255;
+        }
+      }
+    }
   }
 
   void ShaderSet(int mode, int p1, int p2, int p3) {
@@ -3898,6 +3980,15 @@ class VM {
       stack_.push_back(0);
       return;
     }
+    if (name == "gfx.rounded_rect") {
+      ExpectArgc(name, argc, 8);
+      gfx_.RoundedRect(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                       ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+                       ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+                       ValueAsInt(args[6], name), ValueAsInt(args[7], name));
+      stack_.push_back(0);
+      return;
+    }
     if (name == "gfx.gradient_rect") {
       ExpectArgc(name, argc, 11);
       gfx_.GradientRect(
@@ -4097,6 +4188,17 @@ class VM {
       gfx_.DrawSpriteScaled(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
                             ValueAsInt(args[2], name), ValueAsInt(args[3], name),
                             ValueAsInt(args[4], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.draw_sprite_region") {
+      ExpectArgc(name, argc, 9);
+      gfx_.DrawSpriteRegionScaled(
+          ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+          ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+          ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+          ValueAsInt(args[6], name), ValueAsInt(args[7], name),
+          ValueAsInt(args[8], name));
       stack_.push_back(0);
       return;
     }

@@ -81,6 +81,7 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gfx.load_sprite("assets/player.png")`
   - `gfx.draw_sprite(id, x, y)`
   - `gfx.draw_sprite_scaled(id, x, y, w, h)`
+  - `gfx.draw_sprite_region(id, sx, sy, sw, sh, dx, dy, dw, dh)`
   - `gfx.anim_register(first_sprite, frame_count, frame_ticks, mode)` (`0` once, `1` loop, `2` ping-pong)
   - `gfx.anim_frame(anim_id, tick)`
   - `gfx.anim_length(anim_id)`
@@ -102,6 +103,7 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gfx.line_thick(x1, y1, x2, y2, thickness, r, g, b)`
   - `gfx.triangle(x1, y1, x2, y2, x3, y3, r, g, b)` (filled)
   - `gfx.rect(x, y, w, h, r, g, b)`
+  - `gfx.rounded_rect(x, y, w, h, radius, r, g, b)`
   - `gfx.gradient_rect(x, y, w, h, r1, g1, b1, r2, g2, b2, vertical)`
   - `gfx.rect_outline(x, y, w, h, r, g, b)`
   - `gfx.circle(x, y, radius, r, g, b)`
