@@ -77,6 +77,10 @@ Prints runtime/compiler version.
 - `gfx.anim_draw(anim_id, tick, x, y)`
 - `gfx.anim_draw_scaled(anim_id, tick, x, y, w, h)`
 - `gfx.draw_sprite_region(id, sx, sy, sw, sh, dx, dy, dw, dh)`
+- `gfx.draw_sprite_tinted(id, x, y, tr, tg, tb)`
+- `gfx.draw_sprite_scaled_tinted(id, x, y, w, h, tr, tg, tb)`
+- `gfx.draw_sprite_rotated(id, x, y, angle_deg, scale1000, tr, tg, tb)`
+- `gfx.nine_patch(id, sx, sy, sw, sh, border, dx, dy, dw, dh)`
 - `gfx.shader_set(mode, p1, p2, p3)` (`1` grayscale, `2` scanline, `3` wave, `4` invert, `5` posterize, `6` rgb-split, `7` vignette, `8` edge, `9` pixelate)
 - `gfx.shader_clear()`
 - `gfx.shader_create()`

@@ -1281,6 +1281,23 @@ struct GraphicsState {
     BlitSprite(s, x, y, w, h);
   }
 
+  void DrawSpriteTinted(int sprite_id, int x, int y, int tint_r, int tint_g,
+                        int tint_b) {
+    EnsureOpen("gfx.draw_sprite_tinted");
+    const SpriteAsset& s = GetSprite(sprite_id, "gfx.draw_sprite_tinted");
+    BlitSpriteTinted(s, x, y, s.width, s.height, tint_r, tint_g, tint_b);
+  }
+
+  void DrawSpriteScaledTinted(int sprite_id, int x, int y, int w, int h,
+                              int tint_r, int tint_g, int tint_b) {
+    EnsureOpen("gfx.draw_sprite_scaled_tinted");
+    if (w <= 0 || h <= 0) {
+      return;
+    }
+    const SpriteAsset& s = GetSprite(sprite_id, "gfx.draw_sprite_scaled_tinted");
+    BlitSpriteTinted(s, x, y, w, h, tint_r, tint_g, tint_b);
+  }
+
   void DrawSpriteRegionScaled(int sprite_id, int src_x, int src_y, int src_w,
                               int src_h, int dst_x, int dst_y, int dst_w,
                               int dst_h) {
@@ -1318,6 +1335,116 @@ struct GraphicsState {
         }
       }
     }
+  }
+
+  void DrawSpriteRotated(int sprite_id, int x, int y, int angle_deg, int scale,
+                         int tint_r, int tint_g, int tint_b) {
+    EnsureOpen("gfx.draw_sprite_rotated");
+    const SpriteAsset& s = GetSprite(sprite_id, "gfx.draw_sprite_rotated");
+    if (scale <= 0) {
+      return;
+    }
+    const double rad =
+        static_cast<double>(angle_deg) * (3.14159265358979323846 / 180.0);
+    const double c = std::cos(rad);
+    const double si = std::sin(rad);
+    const int tw = std::max(1, (s.width * scale) / 1000);
+    const int th = std::max(1, (s.height * scale) / 1000);
+    const double hw = static_cast<double>(tw) * 0.5;
+    const double hh = static_cast<double>(th) * 0.5;
+    const double sx_half = static_cast<double>(s.width) * 0.5;
+    const double sy_half = static_cast<double>(s.height) * 0.5;
+    const int tr = ClampColor(tint_r);
+    const int tg = ClampColor(tint_g);
+    const int tb = ClampColor(tint_b);
+
+    for (int yy = 0; yy < th; ++yy) {
+      for (int xx = 0; xx < tw; ++xx) {
+        const double dx = static_cast<double>(xx) - hw;
+        const double dy = static_cast<double>(yy) - hh;
+        const double src_dx = (dx * c + dy * si) * (1000.0 / scale);
+        const double src_dy = (-dx * si + dy * c) * (1000.0 / scale);
+        const double src_xf = sx_half + src_dx;
+        const double src_yf = sy_half + src_dy;
+        const int sx = static_cast<int>(std::floor(src_xf));
+        const int sy = static_cast<int>(std::floor(src_yf));
+        if (sx < 0 || sy < 0 || sx >= s.width || sy >= s.height) {
+          continue;
+        }
+        const SpriteTexel& t =
+            s.texels[static_cast<std::size_t>(sy * s.width + sx)];
+        if (t.a == 0) {
+          continue;
+        }
+        const int tx = x + xx;
+        const int ty = y + yy;
+        if (tx < 0 || ty < 0 || tx >= width || ty >= height) {
+          continue;
+        }
+        const int rr = (static_cast<int>(t.r) * tr) / 255;
+        const int gg = (static_cast<int>(t.g) * tg) / 255;
+        const int bb = (static_cast<int>(t.b) * tb) / 255;
+        Pixel& out = pixels[static_cast<std::size_t>(ty * width + tx)];
+        if (t.a == 255) {
+          out = Pixel{rr, gg, bb};
+        } else {
+          const int a = static_cast<int>(t.a);
+          out.r = (rr * a + out.r * (255 - a)) / 255;
+          out.g = (gg * a + out.g * (255 - a)) / 255;
+          out.b = (bb * a + out.b * (255 - a)) / 255;
+        }
+      }
+    }
+  }
+
+  void NinePatch(int sprite_id, int src_x, int src_y, int src_w, int src_h,
+                 int border, int dst_x, int dst_y, int dst_w, int dst_h) {
+    EnsureOpen("gfx.nine_patch");
+    if (src_w <= 0 || src_h <= 0 || dst_w <= 0 || dst_h <= 0) {
+      return;
+    }
+    (void)GetSprite(sprite_id, "gfx.nine_patch");
+    if (border < 0) {
+      border = 0;
+    }
+    border = std::min(border, std::min(src_w / 2, src_h / 2));
+    const int mid_sw = std::max(0, src_w - (2 * border));
+    const int mid_sh = std::max(0, src_h - (2 * border));
+    const int left_dw = std::min(border, dst_w / 2);
+    const int right_dw = std::min(border, dst_w - left_dw);
+    const int top_dh = std::min(border, dst_h / 2);
+    const int bottom_dh = std::min(border, dst_h - top_dh);
+    const int mid_dw = std::max(0, dst_w - left_dw - right_dw);
+    const int mid_dh = std::max(0, dst_h - top_dh - bottom_dh);
+
+    // top row
+    DrawSpriteRegionScaled(sprite_id, src_x, src_y, border, border, dst_x, dst_y,
+                           left_dw, top_dh);
+    DrawSpriteRegionScaled(sprite_id, src_x + border, src_y, mid_sw, border,
+                           dst_x + left_dw, dst_y, mid_dw, top_dh);
+    DrawSpriteRegionScaled(sprite_id, src_x + src_w - border, src_y, border,
+                           border, dst_x + left_dw + mid_dw, dst_y, right_dw,
+                           top_dh);
+    // middle row
+    DrawSpriteRegionScaled(sprite_id, src_x, src_y + border, border, mid_sh, dst_x,
+                           dst_y + top_dh, left_dw, mid_dh);
+    DrawSpriteRegionScaled(sprite_id, src_x + border, src_y + border, mid_sw,
+                           mid_sh, dst_x + left_dw, dst_y + top_dh, mid_dw,
+                           mid_dh);
+    DrawSpriteRegionScaled(sprite_id, src_x + src_w - border, src_y + border,
+                           border, mid_sh, dst_x + left_dw + mid_dw,
+                           dst_y + top_dh, right_dw, mid_dh);
+    // bottom row
+    DrawSpriteRegionScaled(sprite_id, src_x, src_y + src_h - border, border,
+                           border, dst_x, dst_y + top_dh + mid_dh, left_dw,
+                           bottom_dh);
+    DrawSpriteRegionScaled(sprite_id, src_x + border, src_y + src_h - border,
+                           mid_sw, border, dst_x + left_dw,
+                           dst_y + top_dh + mid_dh, mid_dw, bottom_dh);
+    DrawSpriteRegionScaled(sprite_id, src_x + src_w - border,
+                           src_y + src_h - border, border, border,
+                           dst_x + left_dw + mid_dw, dst_y + top_dh + mid_dh,
+                           right_dw, bottom_dh);
   }
 
   void ShaderSet(int mode, int p1, int p2, int p3) {
@@ -1632,6 +1759,41 @@ struct GraphicsState {
           out.r = (static_cast<int>(t.r) * a + out.r * (255 - a)) / 255;
           out.g = (static_cast<int>(t.g) * a + out.g * (255 - a)) / 255;
           out.b = (static_cast<int>(t.b) * a + out.b * (255 - a)) / 255;
+        }
+      }
+    }
+  }
+
+  void BlitSpriteTinted(const SpriteAsset& s, int dst_x, int dst_y, int dst_w,
+                        int dst_h, int tint_r, int tint_g, int tint_b) {
+    const int tr = ClampColor(tint_r);
+    const int tg = ClampColor(tint_g);
+    const int tb = ClampColor(tint_b);
+    for (int yy = 0; yy < dst_h; ++yy) {
+      const int sy = (yy * s.height) / dst_h;
+      for (int xx = 0; xx < dst_w; ++xx) {
+        const int sx = (xx * s.width) / dst_w;
+        const SpriteTexel& t =
+            s.texels[static_cast<std::size_t>(sy * s.width + sx)];
+        if (t.a == 0) {
+          continue;
+        }
+        const int tx = dst_x + xx;
+        const int ty = dst_y + yy;
+        if (tx < 0 || ty < 0 || tx >= width || ty >= height) {
+          continue;
+        }
+        const int rr = (static_cast<int>(t.r) * tr) / 255;
+        const int gg = (static_cast<int>(t.g) * tg) / 255;
+        const int bb = (static_cast<int>(t.b) * tb) / 255;
+        Pixel& out = pixels[static_cast<std::size_t>(ty * width + tx)];
+        if (t.a == 255) {
+          out = Pixel{rr, gg, bb};
+        } else {
+          const int a = static_cast<int>(t.a);
+          out.r = (rr * a + out.r * (255 - a)) / 255;
+          out.g = (gg * a + out.g * (255 - a)) / 255;
+          out.b = (bb * a + out.b * (255 - a)) / 255;
         }
       }
     }
@@ -4191,6 +4353,35 @@ class VM {
       stack_.push_back(0);
       return;
     }
+    if (name == "gfx.draw_sprite_tinted") {
+      ExpectArgc(name, argc, 6);
+      gfx_.DrawSpriteTinted(
+          ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+          ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+          ValueAsInt(args[4], name), ValueAsInt(args[5], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.draw_sprite_scaled_tinted") {
+      ExpectArgc(name, argc, 8);
+      gfx_.DrawSpriteScaledTinted(
+          ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+          ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+          ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+          ValueAsInt(args[6], name), ValueAsInt(args[7], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.draw_sprite_rotated") {
+      ExpectArgc(name, argc, 8);
+      gfx_.DrawSpriteRotated(
+          ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+          ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+          ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+          ValueAsInt(args[6], name), ValueAsInt(args[7], name));
+      stack_.push_back(0);
+      return;
+    }
     if (name == "gfx.draw_sprite_region") {
       ExpectArgc(name, argc, 9);
       gfx_.DrawSpriteRegionScaled(
@@ -4199,6 +4390,16 @@ class VM {
           ValueAsInt(args[4], name), ValueAsInt(args[5], name),
           ValueAsInt(args[6], name), ValueAsInt(args[7], name),
           ValueAsInt(args[8], name));
+      stack_.push_back(0);
+      return;
+    }
+    if (name == "gfx.nine_patch") {
+      ExpectArgc(name, argc, 10);
+      gfx_.NinePatch(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
+                     ValueAsInt(args[2], name), ValueAsInt(args[3], name),
+                     ValueAsInt(args[4], name), ValueAsInt(args[5], name),
+                     ValueAsInt(args[6], name), ValueAsInt(args[7], name),
+                     ValueAsInt(args[8], name), ValueAsInt(args[9], name));
       stack_.push_back(0);
       return;
     }

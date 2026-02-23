@@ -81,7 +81,11 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gfx.load_sprite("assets/player.png")`
   - `gfx.draw_sprite(id, x, y)`
   - `gfx.draw_sprite_scaled(id, x, y, w, h)`
+  - `gfx.draw_sprite_tinted(id, x, y, tr, tg, tb)`
+  - `gfx.draw_sprite_scaled_tinted(id, x, y, w, h, tr, tg, tb)`
+  - `gfx.draw_sprite_rotated(id, x, y, angle_deg, scale1000, tr, tg, tb)`
   - `gfx.draw_sprite_region(id, sx, sy, sw, sh, dx, dy, dw, dh)`
+  - `gfx.nine_patch(id, sx, sy, sw, sh, border, dx, dy, dw, dh)`
   - `gfx.anim_register(first_sprite, frame_count, frame_ticks, mode)` (`0` once, `1` loop, `2` ping-pong)
   - `gfx.anim_frame(anim_id, tick)`
   - `gfx.anim_length(anim_id)`
