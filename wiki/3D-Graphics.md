@@ -19,6 +19,8 @@ It projects 3D primitives into the active `gfx` framebuffer/window with configur
   - Sets camera position
 - `gx3d.camera_move(dx, dy, dz)`
   - Moves camera relative to current position
+- `gx3d.camera_x()`, `gx3d.camera_y()`, `gx3d.camera_z()`
+  - Read current camera coordinates
 - `gx3d.fov(fov)`
   - Sets projection scale (larger -> stronger perspective scale)
 - `gx3d.clip(near, far)`

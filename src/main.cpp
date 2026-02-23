@@ -2898,6 +2898,10 @@ class VM {
       cam_.z += static_cast<double>(dz);
     }
 
+    int CameraX() const { return static_cast<int>(std::lround(cam_.x)); }
+    int CameraY() const { return static_cast<int>(std::lround(cam_.y)); }
+    int CameraZ() const { return static_cast<int>(std::lround(cam_.z)); }
+
     void Rotate(int x_deg, int y_deg, int z_deg) {
       rot_deg_ = Vec3{static_cast<double>(x_deg), static_cast<double>(y_deg),
                       static_cast<double>(z_deg)};
@@ -5294,6 +5298,22 @@ class VM {
       stack_.push_back(0);
       return;
     }
+    if (name == "time.now_ms") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(CurrentMonotonicMs());
+      return;
+    }
+    if (name == "time.delta_ms") {
+      ExpectArgc(name, argc, 0);
+      const int now = CurrentMonotonicMs();
+      int delta = now - last_time_tick_ms_;
+      if (delta < 0) {
+        delta = 0;
+      }
+      last_time_tick_ms_ = now;
+      stack_.push_back(delta);
+      return;
+    }
     if (name == "audio.play_wav") {
       ExpectArgc(name, argc, 2);
       if (!std::holds_alternative<std::string>(args[0])) {
@@ -5328,6 +5348,21 @@ class VM {
       gx3d_.CameraMove(ValueAsInt(args[0], name), ValueAsInt(args[1], name),
                        ValueAsInt(args[2], name));
       stack_.push_back(0);
+      return;
+    }
+    if (name == "gx3d.camera_x") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(gx3d_.CameraX());
+      return;
+    }
+    if (name == "gx3d.camera_y") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(gx3d_.CameraY());
+      return;
+    }
+    if (name == "gx3d.camera_z") {
+      ExpectArgc(name, argc, 0);
+      stack_.push_back(gx3d_.CameraZ());
       return;
     }
     if (name == "gx3d.rotate") {
@@ -5983,6 +6018,21 @@ class VM {
     return (ddx * ddx + ddy * ddy) <= (r * r) ? 1 : 0;
   }
 
+  static int CurrentMonotonicMs() {
+    using clock = std::chrono::steady_clock;
+    static const auto start = clock::now();
+    const auto now = clock::now();
+    const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - start)
+                        .count();
+    if (ms > static_cast<long long>(std::numeric_limits<int>::max())) {
+      return std::numeric_limits<int>::max();
+    }
+    if (ms < 0) {
+      return 0;
+    }
+    return static_cast<int>(ms);
+  }
+
   static void ExpectArgc(const std::string& name, int argc, int expected) {
     if (argc != expected) {
       throw std::runtime_error(name + " expects " + std::to_string(expected) +
@@ -6001,6 +6051,7 @@ class VM {
   std::uint32_t noise_seed_ = 12345U;
   std::uint32_t torch_seed_ = 4242U;
   std::mt19937 torch_rng_{torch_seed_};
+  int last_time_tick_ms_ = CurrentMonotonicMs();
 };
 
 std::string ReadFile(const std::filesystem::path& file) {
@@ -6281,7 +6332,7 @@ int main(int argc, char** argv) {
 
     std::string cmd = argv[1];
     if (cmd == "version") {
-      std::cout << "pypp 0.7.5-cpp\n";
+      std::cout << "pypp 0.7.6-cpp\n";
       return 0;
     }
 

@@ -1,4 +1,4 @@
-# py++ (C++ edition) - Update 0.7.5
+# py++ (C++ edition) - Update 0.7.6
 
 `py++` ist jetzt komplett in C++ umgesetzt (kein Python-Compiler mehr im Projekt).
 Die Syntax bleibt python-aehnlich, aber bewusst minimal.
@@ -136,6 +136,8 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gfx.save("build/frame.ppm")`
   - `gfx.save_frame("build/pong", frame)`
   - `time.sleep_ms(ms)`
+  - `time.now_ms()` (monotonic runtime clock in ms)
+  - `time.delta_ms()` (ms since previous call)
 - Built-in Audio-Library:
   - `audio.play_wav("assets/sound.wav", loop)`
   - `audio.stop()`
@@ -143,6 +145,7 @@ Die Syntax bleibt python-aehnlich, aber bewusst minimal.
   - `gx3d.reset()`
   - `gx3d.camera(x, y, z)`
   - `gx3d.camera_move(dx, dy, dz)`
+  - `gx3d.camera_x()`, `gx3d.camera_y()`, `gx3d.camera_z()`
   - `gx3d.fov(fov)`
   - `gx3d.clip(near, far)`
   - `gx3d.backface_cull(0|1)` (solid face culling toggle)
@@ -229,6 +232,7 @@ Hinweis:
 .\build\pypp.exe run examples\gx3d_frame.pypp
 .\build\pypp.exe run examples\gx3d_test.pypp
 .\build\pypp.exe run examples\gx3d_stability_demo.pypp
+.\build\pypp.exe run examples\testprogram.pypp
 .\build\pypp.exe run examples\multiplayer_test.pypp
 .\build\pypp.exe run examples\random_noise.pypp
 .\build\pypp.exe run examples\torch_demo.pypp
@@ -249,7 +253,7 @@ import config as c
 print(c.width)
 ```
 
-Hinweis: Klassen/Funktionen als eigene User-Definitionen sind fuer den naechsten Sprachschritt vorgesehen. `0.7.5` liefert das aktuelle Alias-Import-Fundament plus Collision-Helper.
+Hinweis: Klassen/Funktionen als eigene User-Definitionen sind fuer den naechsten Sprachschritt vorgesehen. `0.7.6` liefert das aktuelle Alias-Import-Fundament plus Collision-Helper.
 
 ## pypp global in PATH
 
@@ -296,8 +300,8 @@ git add .
 git commit -m "Add release workflow"
 git push
 
-git tag v0.7.5
-git push origin v0.7.5
+git tag v0.7.6
+git push origin v0.7.6
 ```
 
 ## VS Code Extension (Language Support)

@@ -261,6 +261,7 @@ High-use `gx3d` calls:
 - `gx3d.reset()`
 - `gx3d.camera(x, y, z)`
 - `gx3d.camera_move(dx, dy, dz)`
+- `gx3d.camera_x()`, `gx3d.camera_y()`, `gx3d.camera_z()`
 - `gx3d.clip(near, far)`
 - `gx3d.backface_cull(0|1)`
 - `gx3d.depth_bias(milli)`
@@ -294,6 +295,10 @@ Recommended render order:
 5. draw `gx3d` primitives
 6. `gfx.present()`
 7. `time.sleep_ms(16)`
+
+Time helpers:
+- `time.now_ms()`
+- `time.delta_ms()`
 
 ## Common Workflows
 
